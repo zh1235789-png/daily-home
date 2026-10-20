@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
@@ -98,6 +98,7 @@ button.ghost { background: var(--chip); color: var(--ink); font-weight: 400; }
 <div id="bar"><span id="barText"></span><button id="shareBtn" type="button">Inboxへ送る</button><button id="clearBtn" class="ghost" type="button">取消</button></div>
 
 <script>
+/* global TextEncoder, TextDecoder */
 'use strict';
 const KEY = 'dh.v1';
 const WD = ['日', '月', '火', '水', '木', '金', '土'];

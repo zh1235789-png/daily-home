@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="今日">
+<meta name="theme-color" content="#f6f5f1">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<title>デイリーホーム</title>
+<style>
+:root {
+  --bg: #f6f5f1; --card: #ffffff; --ink: #1d1d1b; --sub: #6b6a64; --line: #e4e2da;
+  --accent: #2f5d8a; --red: #b3261e; --red-bg: #fbeceb; --amber: #8a5a00; --amber-bg: #fdf3dc;
+  --green: #2e7d4f; --chip: #eeece5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --card: #1f1f1d; --ink: #ecebe6; --sub: #a09f98; --line: #34332f;
+    --accent: #8db8e3; --red: #f2857c; --red-bg: #3a1f1d; --amber: #f0c060; --amber-bg: #3a2f17;
+    --green: #7fcf9c; --chip: #2b2b28;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  padding: env(safe-area-inset-top) 0 calc(80px + env(safe-area-inset-bottom));
+}
+main { max-width: 720px; margin: 0 auto; padding: 0 16px; }
+header { padding: 18px 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+h1 { font-size: 24px; margin: 0; letter-spacing: .02em; }
+.meta { color: var(--sub); font-size: 12px; text-align: right; }
+.meta.stale { color: var(--red); font-weight: 600; }
+.summary { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 14px; }
+.pill { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--chip); color: var(--sub); }
+.pill.red { background: var(--red-bg); color: var(--red); font-weight: 600; }
+.pill.amber { background: var(--amber-bg); color: var(--amber); font-weight: 600; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin: 0 0 12px; padding: 12px 14px; }
+section.red { border-color: var(--red); }
+h2 { font-size: 14px; margin: 0 0 6px; display: flex; align-items: center; gap: 6px; }
+h2 .n { color: var(--sub); font-weight: 400; }
+details > summary { cursor: pointer; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary h2::after { content: "▸"; color: var(--sub); margin-left: auto; }
+details[open] > summary h2::after { content: "▾"; }
+ul { list-style: none; margin: 0; padding: 0; }
+li.task { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); align-items: flex-start; }
+li.task:first-child { border-top: 0; }
+li.task.child { padding-left: 26px; }
+input[type=checkbox] { width: 20px; height: 20px; margin: 2px 0 0; flex: none; accent-color: var(--accent); }
+.body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.done .txt { text-decoration: line-through; color: var(--sub); }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 3px; font-size: 12px; color: var(--sub); }
+.due { font-weight: 600; }
+.due.red { color: var(--red); }
+.due.amber { color: var(--amber); }
+a { color: var(--accent); text-decoration: none; }
+a.note::before { content: "📝 "; }
+.ev { display: flex; gap: 10px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.ev:first-child { border-top: 0; }
+.ev .t { width: 44px; flex: none; color: var(--sub); font-variant-numeric: tabular-nums; }
+.day { font-size: 12px; color: var(--sub); margin: 8px 0 2px; font-weight: 600; }
+.day.today { color: var(--accent); }
+.lead { font-size: 13px; color: var(--sub); margin: 0 0 6px; padding-left: 10px; border-left: 3px solid var(--line); }
+.empty { color: var(--sub); font-size: 13px; padding: 4px 0; }
+.mail .from { font-size: 12px; color: var(--sub); }
+.wait { opacity: .6; }
+#bar {
+  position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: var(--card); border-top: 1px solid var(--line); display: none; gap: 10px; align-items: center; justify-content: center;
+}
+#bar.show { display: flex; }
+button {
+  font: inherit; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button { color: #10202e; } }
+button.ghost { background: var(--chip); color: var(--ink); font-weight: 400; }
+#lock { max-width: 360px; margin: 18vh auto 0; padding: 0 16px; text-align: center; }
+#lock input { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); margin: 12px 0; }
+#lock .err { color: var(--red); font-size: 13px; min-height: 1.4em; }
+</style>
+</head>
+<body>
+<div id="lock" hidden>
+  <h1>デイリーホーム</h1>
+  <p class="meta" style="text-align:center">パスフレーズを入力してください（この端末に保存されます）</p>
+  <form id="lockForm">
+    <input id="pass" type="password" autocomplete="current-password" aria-label="パスフレーズ">
+    <button type="submit">開く</button>
+  </form>
+  <p class="err" id="lockErr"></p>
+</div>
+<main id="app" hidden></main>
+<div id="bar"><span id="barText"></span><button id="shareBtn" type="button">Inboxへ送る</button><button id="clearBtn" class="ghost" type="button">取消</button></div>
+
+<script>
+'use strict';
+const KEY = 'dh.v1';
+const WD = ['日', '月', '火', '水', '木', '金', '土'];
+let DATA = null;
+let S = loadState();
+
+function loadState() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY) || '{}');
+    if (!s || typeof s !== 'object') throw new Error('bad');
+    return { pass: typeof s.pass === 'string' ? s.pass : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {} };
+  } catch (e) {
+    return { pass: '', checks: {}, sent: {} };
+  }
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存できなくても表示は続ける */ } }
+
+// ---------- 日付 ----------
+function todayISO(now) {
+  const d = now || new Date();
+  // 端末の時刻を東京時間として扱う（JST固定）
+  const j = new Date(d.getTime() + (9 * 60 + d.getTimezoneOffset()) * 60000);
+  return j.getFullYear() + '-' + String(j.getMonth() + 1).padStart(2, '0') + '-' + String(j.getDate()).padStart(2, '0');
+}
+function diffDays(a, b) { return Math.round((Date.parse(a + 'T00:00:00Z') - Date.parse(b + 'T00:00:00Z')) / 86400000); }
+function addDays(iso, n) { const t = new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000); return t.toISOString().slice(0, 10); }
+function md(iso) { const [, m, d] = iso.split('-'); return (+m) + '/' + (+d); }
+function wd(iso) { return WD[new Date(iso + 'T00:00:00Z').getUTCDay()]; }
+function relLabel(due, today) {
+  const n = diffDays(due, today);
+  if (n < 0) return (-n) + '日超過';
+  if (n === 0) return '今日';
+  if (n === 1) return '明日';
+  return 'あと' + n + '日';
+}
+
+// ---------- 振り分け（純粋関数） ----------
+// タスクハブのデータを「期限切れ／今日／今週／今後」に分ける。done（取り消し線）は除く。
+function classify(hub, today) {
+  const out = { overdue: [], today: [], week: [], later: [], undated: [] };
+  const week7 = addDays(today, 7);
+  (hub.week || []).forEach(it => {
+    if (it.done) return;
+    const x = Object.assign({ kind: 'week' }, it);
+    if (it.due && it.due < today) out.overdue.push(x);
+    else if (it.due === today) out.today.push(x);
+    else out.week.push(x);
+  });
+  (hub.dated || []).forEach(it => {
+    if (it.done) return;
+    const x = Object.assign({ kind: 'dated' }, it);
+    if (!it.due) { (it.asap ? out.week : out.undated).push(x); return; }
+    if (it.start && it.start <= today && today <= it.due) { (it.due === today ? out.today : out.week).push(Object.assign(x, { ongoing: true })); return; }
+    if (it.due < today) out.overdue.push(x);
+    else if (it.due === today) out.today.push(x);
+    else if (it.due <= week7 || (it.start && it.start <= week7)) out.week.push(x);
+    else out.later.push(x);
+  });
+  const byDue = (a, b) => (a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0;
+  out.overdue.sort(byDue); out.week.sort(byDue); out.later.sort(byDue);
+  return out;
+}
+
+// 完了報告の文面。OET・メールは対象外（タスクハブの項目だけ）
+function reportText(items) {
+  return items.map(it => '✅完了: ' + plain(it.text)).join('\n');
+}
+function pendingReports(data, checks, sent) {
+  if (!data) return [];
+  const all = [];
+  const h = data.hub || {};
+  const walk = (arr) => (arr || []).forEach(it => { all.push(it); walk(it.children); });
+  walk(h.week); walk(h.dated); walk(h.big); walk(h.someday);
+  return all.filter(it => !it.done && checks[it.id] && !sent[it.id]);
+}
+
+// ---------- 表示用 ----------
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+function plain(s) { return String(s || '').replace(/\*\*|~~/g, '').replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2').replace(/\[\[([^\]]+)\]\]/g, '$1'); }
+function inline(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/~~(.+?)~~/g, '<s>$1</s>')
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+function noteLink(name) {
+  return '<a class="note" href="obsidian://open?vault=' + encodeURIComponent('Obsidian Vault') + '&amp;file=' + encodeURIComponent(name) + '">' + esc(name) + '</a>';
+}
+
+function taskLi(it, today, opts) {
+  const o = opts || {};
+  const checked = !!S.checks[it.id];
+  const tags = [];
+  if (it.due) {
+    const n = diffDays(it.due, today);
+    const cls = n < 0 ? 'red' : n <= 1 ? 'amber' : '';
+    const lab = it.label ? esc(it.label) : md(it.due) + '（' + wd(it.due) + '）';
+    tags.push('<span class="due ' + cls + '">' + lab + (it.ongoing ? ' · 期間中' : ' · ' + relLabel(it.due, today)) + '</span>');
+  } else if (it.label) {
+    tags.push('<span class="due' + (it.asap ? ' amber' : '') + '">' + esc(it.label) + '</span>');
+  }
+  if (it.area) tags.push('<span>' + esc(it.area) + '</span>');
+  (it.notes || []).forEach(n => tags.push(noteLink(n)));
+  let h = '<li class="task' + (o.child ? ' child' : '') + (checked ? ' done' : '') + '">' +
+    '<input type="checkbox" data-id="' + esc(it.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
+    '<div class="body"><div class="txt">' + inline(it.text) + '</div>' +
+    (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + '</div></li>';
+  if (o.withChildren) (it.children || []).forEach(c => { if (!c.done) h += taskLi(c, today, { child: true }); });
+  return h;
+}
+
+function sec(title, n, inner, cls) {
+  return '<section class="' + (cls || '') + '"><h2>' + title + (n != null ? ' <span class="n">' + n + '</span>' : '') + '</h2>' + inner + '</section>';
+}
+function fold(title, n, inner) {
+  return '<section><details><summary><h2>' + title + ' <span class="n">' + n + '</span></h2></summary>' + inner + '</details></section>';
+}
+
+function render() {
+  const app = document.getElementById('app');
+  const today = todayISO();
+  const d = DATA;
+  const c = classify(d.hub || {}, today);
+  const cal = ((d.calendar && d.calendar.events) || []).filter(e => e.date >= today && e.date <= addDays(today, 6));
+  const mails = ((d.gmail && d.gmail.items) || []);
+  const mailOpen = mails.filter(m => !m.waiting && !S.checks['mail:' + m.url]);
+  const oet = d.oet;
+
+  const ageH = (Date.now() - Date.parse(d.generated)) / 3600000;
+  let h = '<header><h1>' + md(today) + '（' + wd(today) + '）</h1><div class="meta' + (ageH > 36 ? ' stale' : '') + '">' +
+    '更新 ' + esc(String(d.generated).slice(5, 16).replace('T', ' ')) + (ageH > 36 ? '<br>データが古い' : '') + '</div></header>';
+
+  h += '<div class="summary">' +
+    (c.overdue.length ? '<span class="pill red">期限切れ ' + c.overdue.length + '</span>' : '') +
+    '<span class="pill' + (c.today.length ? ' amber' : '') + '">今日 ' + c.today.length + '</span>' +
+    '<span class="pill">今週 ' + c.week.length + '</span>' +
+    '<span class="pill' + (mailOpen.length ? ' amber' : '') + '">メール ' + mailOpen.length + '</span></div>';
+
+  if (c.overdue.length) h += sec('⚠️ 期限切れ', c.overdue.length, '<ul>' + c.overdue.map(it => taskLi(it, today)).join('') + '</ul>', 'red');
+
+  const todayEv = cal.filter(e => e.date === today);
+  h += sec('📌 今日', c.today.length,
+    (c.today.length ? '<ul>' + c.today.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">期限が今日のタスクはありません</p>') +
+    (todayEv.length ? '<div class="day today">予定</div>' + todayEv.map(evRow).join('') : ''));
+
+  h += sec('✉️ 対応が必要なメール', mailOpen.length,
+    mails.length ? '<ul>' + mails.map(m => mailLi(m)).join('') + '</ul>' : '<p class="empty">要対応のメールはありません</p>');
+
+  if (oet) h += oetSec(oet, today);
+
+  h += sec('🔥 今週', c.week.length, c.week.length ? '<ul>' + c.week.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">なし</p>');
+
+  h += sec('🗓 予定（7日間）', cal.length, calBlock(cal, today));
+
+  if (c.later.length) h += fold('📅 今後の期限', c.later.length, '<ul>' + c.later.map(it => taskLi(it, today)).join('') + '</ul>');
+  const big = (d.hub.big || []).filter(x => !x.done);
+  if (big.length) h += fold('📌 期限はないが大きいもの', big.length, '<ul>' + big.map(it => taskLi(it, today, { withChildren: true })).join('') + '</ul>');
+  const later2 = c.undated.concat((d.hub.someday || []).filter(x => !x.done));
+  if (later2.length) h += fold('🗂 いつか・時期未定', later2.length, '<ul>' + later2.map(it => taskLi(it, today)).join('') + '</ul>');
+
+  h += '<p class="meta" style="text-align:center;margin:18px 0">チェックした項目は下のボタンでリマインダー「Inbox」へ送ると、毎晩21:30にタスクハブへ反映されます</p>';
+  app.innerHTML = h;
+  updateBar();
+}
+
+function evRow(e) {
+  return '<div class="ev"><span class="t">' + esc(e.time || '終日') + '</span><span>' + esc(e.title) + (e.where ? ' <span class="meta">· ' + esc(e.where) + '</span>' : '') + '</span></div>';
+}
+function calBlock(cal, today) {
+  if (!cal.length) return '<p class="empty">予定はありません</p>';
+  let h = '', cur = '';
+  cal.forEach(e => {
+    if (e.date !== cur) { cur = e.date; h += '<div class="day' + (cur === today ? ' today' : '') + '">' + md(cur) + '（' + wd(cur) + '）' + (cur === today ? ' 今日' : '') + '</div>'; }
+    h += evRow(e);
+  });
+  return h;
+}
+function mailLi(m) {
+  const id = 'mail:' + m.url;
+  const checked = !!S.checks[id];
+  return '<li class="task mail' + (checked ? ' done' : '') + (m.waiting ? ' wait' : '') + '">' +
+    '<input type="checkbox" data-id="' + esc(id) + '"' + (checked ? ' checked' : '') + ' aria-label="対応済み">' +
+    '<div class="body"><div class="from">' + esc(m.from) + ' · ' + esc(md(m.date)) + (m.waiting ? ' · 返信待ち' : '') + '</div>' +
+    '<div class="txt"><a href="' + esc(m.url) + '" target="_blank" rel="noopener">' + esc(m.subject) + '</a></div>' +
+    '<div class="tags"><span>' + esc(m.action) + '</span></div></div></li>';
+}
+function oetSec(o, today) {
+  const stale = o.date !== today;
+  let h = '';
+  if (stale) h += '<p class="lead">⚠️ ' + esc(o.date || '') + ' のノートです（今日の分はまだ作られていません）</p>';
+  h += (o.lead || []).slice(0, 3).map(l => '<p class="lead">' + inline(l) + '</p>').join('');
+  h += '<ul>' + (o.menu || []).map(m => {
+    const checked = !!S.checks[m.id];
+    return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(m.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
+      '<div class="body"><div class="txt">' + esc(m.prio) + ' <b>' + esc(m.skill) + '</b> ' + inline(m.text) + '</div><div class="tags"><span>' + esc(m.time) + '</span></div></div></li>';
+  }).join('') + '</ul>';
+  h += '<div class="tags" style="margin-top:6px">' + noteLink('📌 今日のOET学習') + '<a href="https://zh1235789-png.github.io/oet-weekly-tracker/" target="_blank" rel="noopener">週次トラッカー</a></div>';
+  return sec('🎧 OET', o.total ? '（' + esc(o.total) + '）' : null, h);
+}
+
+function updateBar() {
+  const p = pendingReports(DATA, S.checks, S.sent);
+  const bar = document.getElementById('bar');
+  bar.classList.toggle('show', p.length > 0);
+  document.getElementById('barText').textContent = '完了 ' + p.length + '件';
+}
+
+// ---------- 復号 ----------
+function b64(s) { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+async function decrypt(env, pass) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: b64(env.salt), iterations: env.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(env.iv) }, key, b64(env.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
+async function load(pass) {
+  const r = await fetch('data.enc.json?t=' + Date.now(), { cache: 'no-store' });
+  if (!r.ok) throw new Error('データを取得できませんでした（' + r.status + '）');
+  const env = await r.json();
+  return decrypt(env, pass);
+}
+
+function showLock(msg) {
+  document.getElementById('app').hidden = true;
+  document.getElementById('lock').hidden = false;
+  document.getElementById('lockErr').textContent = msg || '';
+}
+
+async function start() {
+  if (!S.pass) { showLock(); return; }
+  try {
+    DATA = await load(S.pass);
+  } catch (e) {
+    showLock(e && e.name === 'OperationError' ? 'パスフレーズが違います' : String((e && e.message) || e));
+    return;
+  }
+  // データから消えた項目のチェックは捨てる（保存領域を育てない）
+  const live = new Set();
+  const walk = (arr) => (arr || []).forEach(it => { live.add(it.id); walk(it.children); });
+  ['week', 'dated', 'big', 'someday'].forEach(k => walk(DATA.hub[k]));
+  ((DATA.oet && DATA.oet.menu) || []).forEach(m => live.add(m.id));
+  ((DATA.gmail && DATA.gmail.items) || []).forEach(m => live.add('mail:' + m.url));
+  Object.keys(S.checks).forEach(k => { if (!live.has(k)) delete S.checks[k]; });
+  Object.keys(S.sent).forEach(k => { if (!live.has(k)) delete S.sent[k]; });
+  save();
+  document.getElementById('lock').hidden = true;
+  document.getElementById('app').hidden = false;
+  render();
+}
+
+function bind() {
+  document.getElementById('lockForm').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    S.pass = document.getElementById('pass').value.trim();
+    save();
+    start();
+  });
+  document.getElementById('app').addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (!t || !t.dataset || !t.dataset.id) return;
+    if (t.checked) S.checks[t.dataset.id] = todayISO(); else { delete S.checks[t.dataset.id]; delete S.sent[t.dataset.id]; }
+    save();
+    t.closest('li').classList.toggle('done', t.checked);
+    updateBar();
+  });
+  document.getElementById('shareBtn').addEventListener('click', async () => {
+    const items = pendingReports(DATA, S.checks, S.sent);
+    if (!items.length) return;
+    const text = reportText(items);
+    try {
+      if (navigator.share) await navigator.share({ text: text });
+      else { await navigator.clipboard.writeText(text); alert('コピーしました。リマインダーの「Inbox」に貼り付けてください'); }
+    } catch (e) {
+      return; // 共有をキャンセルしたときは送信済みにしない
+    }
+    items.forEach(it => { S.sent[it.id] = todayISO(); });
+    save();
+    updateBar();
+  });
+  document.getElementById('clearBtn').addEventListener('click', () => {
+    pendingReports(DATA, S.checks, S.sent).forEach(it => { delete S.checks[it.id]; });
+    save();
+    render();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && DATA) start(); });
+}
+
+if (typeof document !== 'undefined' && document.getElementById('app') && typeof document.getElementById('app').addEventListener === 'function') {
+  bind();
+  start();
+}
+</script>
+</body>
+</html>

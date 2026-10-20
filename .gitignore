@@ -1,0 +1,3 @@
+build/__pycache__/
+*.plain.json
+.DS_Store

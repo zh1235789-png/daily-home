@@ -20,12 +20,13 @@ LOG="$CONF/refresh.log"
 SKILL="$HOME/.claude/scheduled-tasks/daily-home-refresh/SKILL.md"
 
 log() { echo "$(date '+%F %T') $*" >> "$LOG"; }
-status() { # status <段階> <メッセージ>
-  python3 - "$STATUS" "$1" "$2" <<'EOF'
+status() { # status <段階> <メッセージ>  … 今回受けた issue 番号（$ids）も書く。ページは番号で自分の依頼を見分ける
+  python3 - "$STATUS" "$1" "$2" "$ids" <<'EOF'
 import json, sys, datetime as dt
-p, stage, msg = sys.argv[1:]
+p, stage, msg, ids = sys.argv[1:]
 now = dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).isoformat(timespec="seconds")
-json.dump({"stage": stage, "message": msg, "at": now}, open(p, "w"), ensure_ascii=False)
+json.dump({"stage": stage, "message": msg, "at": now, "req": [int(x) for x in ids.split()]},
+          open(p, "w"), ensure_ascii=False)
 EOF
 }
 
@@ -47,7 +48,11 @@ log "refresh requested: $ids"
 
 # 1) タスク・OET（Claude 不要）
 status tasks "タスクを更新しました。メールと予定を取得中…"
-"$HERE/publish.sh" >>"$LOG" 2>&1 || { status error "タスクの更新に失敗しました（Macのログを確認）"; log "publish failed"; exit 1; }
+if ! "$HERE/publish.sh" >>"$LOG" 2>&1; then
+  status error "タスクの更新に失敗しました（Macのログを確認）"; log "publish failed"
+  "$HERE/publish.sh" >>"$LOG" 2>&1  # 一時的な失敗なら、せめてエラー状態だけでも届ける
+  exit 1
+fi
 
 # 2) カレンダー・Gmail（Claude CLI が必要）
 if ! claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then

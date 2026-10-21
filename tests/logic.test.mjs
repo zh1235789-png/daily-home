@@ -76,19 +76,21 @@ test('HTMLはエスケープされ、強調と打ち消しだけ残る', () => {
 
 test('更新ボタン：押す前の状態は無視し、押した後の段階を表示する', () => {
   const pressed = Date.parse('2026-10-21T08:00:00+09:00');
-  const old = { refresh: { stage: 'done', message: '更新しました', at: '2026-10-21T07:00:00+09:00' } };
-  assert.equal(app.refreshMessage(old, pressed, pressed + 30000).done, false);
-  const mid = { refresh: { stage: 'tasks', message: 'メール取得中', at: '2026-10-21T08:01:00+09:00' } };
-  assert.deepEqual(norm(app.refreshMessage(mid, pressed, pressed + 60000)), { text: '⏳ メール取得中', done: false, err: false });
-  const fin = { refresh: { stage: 'done', message: '更新しました', at: '2026-10-21T08:03:00+09:00' } };
-  assert.equal(app.refreshMessage(fin, pressed, pressed + 180000).done, true);
-  const bad = { refresh: { stage: 'error', message: '未ログイン', at: '2026-10-21T08:01:00+09:00' } };
-  assert.equal(app.refreshMessage(bad, pressed, pressed + 60000).err, true);
+  // 前回の依頼（#3）の完了は今回（#5）の完了として扱わない
+  const old = { refresh: { stage: 'done', message: '更新しました', at: '2026-10-21T07:00:00+09:00', req: [3] } };
+  assert.equal(app.refreshMessage(old, 5, pressed, pressed + 30000).done, false);
+  const mid = { refresh: { stage: 'tasks', message: 'メール取得中', at: '2026-10-21T08:01:00+09:00', req: [5] } };
+  assert.deepEqual(norm(app.refreshMessage(mid, 5, pressed, pressed + 60000)), { text: '⏳ メール取得中', done: false, err: false });
+  // Mac の時計が遅れていても（at が押した時刻より前でも）番号が合えば拾う
+  const fin = { refresh: { stage: 'done', message: '更新しました', at: '2026-10-21T07:58:00+09:00', req: [4, 5] } };
+  assert.equal(app.refreshMessage(fin, 5, pressed, pressed + 180000).done, true);
+  const bad = { refresh: { stage: 'error', message: '未ログイン', at: '2026-10-21T08:01:00+09:00', req: [5] } };
+  assert.equal(app.refreshMessage(bad, 5, pressed, pressed + 60000).err, true);
 });
 
 test('更新ボタン：Macが7分応答しなければ打ち切る', () => {
   const pressed = Date.parse('2026-10-21T08:00:00+09:00');
-  const m = app.refreshMessage({ refresh: null }, pressed, pressed + 8 * 60000);
+  const m = app.refreshMessage({ refresh: null }, 5, pressed, pressed + 8 * 60000);
   assert.equal(m.done, true);
   assert.equal(m.err, true);
 });

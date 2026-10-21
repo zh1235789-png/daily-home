@@ -238,7 +238,7 @@ function render() {
   const ageH = (Date.now() - Date.parse(d.generated)) / 3600000;
   let h = '<header><h1>' + md(today) + '（' + wd(today) + '）</h1><div class="meta' + (ageH > 36 ? ' stale' : '') + '">' +
     '更新 ' + esc(String(d.generated).slice(5, 16).replace('T', ' ')) + (ageH > 36 ? '<br>データが古い' : '') + '</div>' +
-    '<div class="right"><button type="button" class="icon-btn" data-act="refresh" aria-label="更新">🔄 更新</button>' +
+    '<div class="right"><button type="button" class="icon-btn" data-act="refresh" aria-label="更新"' + (R.timer ? ' disabled' : '') + '>' + (R.timer ? '⏳ 更新中' : '🔄 更新') + '</button>' +
     '<button type="button" class="icon-btn" data-act="settings" aria-label="設定">⚙</button></div></header>';
   if (R.msg) h += '<p class="rstat' + (R.err ? ' err' : '') + '">' + esc(R.msg) + '</p>';
   if (R.showToken) h += tokenPanel();
@@ -321,14 +321,15 @@ function updateBar() {
 // ---------- 更新ボタン ----------
 // ボタン → 本人のトークンで GitHub に title=refresh の issue を立てる → Mac が1分おきに拾って更新・push。
 // ページは data.enc.json を読み直し、Mac が書いた refresh（段階とメッセージ）を表示する。
-const R = { pressed: 0, timer: null, msg: '', err: false, showToken: false };
+const R = { pressed: 0, req: 0, timer: null, msg: '', err: false, showToken: false };
 const REPO_API = 'https://api.github.com/repos/zh1235789-png/daily-home/issues';
 const WAIT_MS = 7 * 60 * 1000;
 
-// 押した時刻以降に Mac が書いた状態だけを見る（純粋関数）
-function refreshMessage(data, pressed, now) {
+// 自分の依頼（issue 番号 req）に対して Mac が書いた状態だけを見る（純粋関数）。
+// 時刻で比べると iPhone と Mac の時計のずれで取りこぼすので、番号で照合する。
+function refreshMessage(data, req, pressed, now) {
   const r = data && data.refresh;
-  if (r && Date.parse(r.at) >= pressed - 5000) {
+  if (r && Array.isArray(r.req) && r.req.indexOf(req) >= 0) {
     if (r.stage === 'done') return { text: '✅ ' + r.message, done: true, err: false };
     if (r.stage === 'error') return { text: '⚠️ ' + r.message, done: true, err: true };
     return { text: '⏳ ' + r.message, done: false, err: false };
@@ -365,6 +366,7 @@ async function requestRefresh() {
     R.msg = '⚠️ トークンが使えません（期限切れか権限不足）。⚙から設定し直してください'; R.err = true; render(); return;
   }
   if (!res.ok) { R.msg = '⚠️ GitHubでエラー（' + res.status + '）'; R.err = true; render(); return; }
+  try { R.req = (await res.json()).number; } catch (e) { R.req = 0; }
   R.pressed = Date.now();
   pollRefresh();
 }
@@ -372,7 +374,7 @@ async function requestRefresh() {
 async function pollRefresh() {
   clearTimeout(R.timer);
   try { DATA = await load(S.pass); } catch (e) { /* 次の回で読む */ }
-  const m = refreshMessage(DATA, R.pressed, Date.now());
+  const m = refreshMessage(DATA, R.req, R.pressed, Date.now());
   R.msg = m.text; R.err = m.err;
   render();
   R.timer = m.done ? null : setTimeout(pollRefresh, 15000);
@@ -383,6 +385,7 @@ async function onAppClick(ev) {
   if (!b) return;
   const act = b.dataset.act;
   if (act === 'refresh') {
+    if (R.timer) return; // 更新中は受け付けない（二重に頼むと待ち状態が分からなくなる）
     R.msg = '⏳ 最新のデータを読み込み中…'; R.err = false; render();
     try { DATA = await load(S.pass); } catch (e) { /* 表示は前のまま */ }
     render();

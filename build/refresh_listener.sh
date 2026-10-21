@@ -32,7 +32,8 @@ EOF
 
 ids=$(gh api "repos/$REPO_SLUG/issues?state=open&creator=$OWNER&per_page=20" \
   --jq '.[] | select(.title == "refresh") | .number' 2>>"$LOG") || exit 0
-[ -z "$ids" ] && exit 0
+ids=$(printf '%s\n' "$ids" | grep -E '^[0-9]+$' | tr '\n' ' ')
+[ -z "${ids// /}" ] && exit 0
 
 # 前の更新がまだ走っていれば、今回の issue は閉じるだけ（続けて押されたとき）
 if ! mkdir "$LOCK" 2>/dev/null; then

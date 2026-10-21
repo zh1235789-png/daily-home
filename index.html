@@ -14,13 +14,13 @@
 :root {
   --bg: #f6f5f1; --card: #ffffff; --ink: #1d1d1b; --sub: #6b6a64; --line: #e4e2da;
   --accent: #2f5d8a; --red: #b3261e; --red-bg: #fbeceb; --amber: #8a5a00; --amber-bg: #fdf3dc;
-  --green: #2e7d4f; --chip: #eeece5;
+  --green: #2e7d4f; --chip: #eeece5; --sat: #2f5d8a; --acc-bg: #e3ecf6;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #141413; --card: #1f1f1d; --ink: #ecebe6; --sub: #a09f98; --line: #34332f;
     --accent: #8db8e3; --red: #f2857c; --red-bg: #3a1f1d; --amber: #f0c060; --amber-bg: #3a2f17;
-    --green: #7fcf9c; --chip: #2b2b28;
+    --green: #7fcf9c; --chip: #2b2b28; --sat: #8db8e3; --acc-bg: #1f2e3d;
   }
 }
 * { box-sizing: border-box; }
@@ -64,6 +64,24 @@ a.note::before { content: "📝 "; }
 .ev:first-child { border-top: 0; }
 .ev .t { width: 44px; flex: none; color: var(--sub); font-variant-numeric: tabular-nums; }
 .day { font-size: 12px; color: var(--sub); margin: 8px 0 2px; font-weight: 600; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-top: 4px; }
+button.cd {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 84px; padding: 4px 2px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink);
+  font: inherit; font-weight: 400; text-align: left; cursor: pointer;
+}
+button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.cd .dh { font-size: 11px; color: var(--sub); text-align: center; line-height: 1.2; }
+.cd .dn { font-size: 16px; font-weight: 700; text-align: center; line-height: 1.15; }
+.cd.today .dn { color: #fff; background: var(--accent); border-radius: 99px; width: 26px; margin: 0 auto; }
+.cd.sun .dh, .cd.sun:not(.today) .dn { color: var(--red); }
+.cd.sat .dh, .cd.sat:not(.today) .dn { color: var(--sat); }
+.chip { font-size: 10px; line-height: 1.3; padding: 1px 3px; border-radius: 4px; background: var(--chip); overflow: hidden; word-break: break-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.chip.timed { background: var(--acc-bg); }
+.chip.task { background: var(--red-bg); color: var(--red); font-weight: 600; }
+.more { font-size: 10px; color: var(--sub); text-align: center; }
+.calday { margin-top: 10px; }
+.ev .t.task { color: var(--red); }
 .day.today { color: var(--accent); }
 .lead { font-size: 13px; color: var(--sub); margin: 0 0 6px; padding-left: 10px; border-left: 3px solid var(--line); }
 .empty { color: var(--sub); font-size: 13px; padding: 4px 0; }
@@ -77,7 +95,8 @@ a.note::before { content: "📝 "; }
 button {
   font: inherit; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button:not(.ghost):not(.icon-btn) { color: #10202e; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button:not(.ghost):not(.icon-btn):not(.cd) { color: #10202e; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cd.today .dn { color: #10202e; } }
 header .right { display: flex; align-items: center; gap: 8px; }
 .icon-btn { background: var(--chip); color: var(--ink); font-weight: 400; padding: 6px 10px; font-size: 14px; white-space: nowrap; }
 .icon-btn:disabled { opacity: .6; }
@@ -264,7 +283,7 @@ function render() {
 
   h += sec('🔥 今週', c.week.length, c.week.length ? '<ul>' + c.week.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">なし</p>');
 
-  h += sec('🗓 予定（7日間）', cal.length, calBlock(cal, today));
+  h += sec('🗓 予定（7日間）', cal.length, calBlock(calDays(cal, c, today, 7), today));
 
   if (c.later.length) h += fold('📅 今後の期限', c.later.length, '<ul>' + c.later.map(it => taskLi(it, today)).join('') + '</ul>');
   const big = (d.hub.big || []).filter(x => !x.done);
@@ -280,14 +299,40 @@ function render() {
 function evRow(e) {
   return '<div class="ev"><span class="t">' + esc(e.time || '終日') + '</span><span>' + esc(e.title) + (e.where ? ' <span class="meta">· ' + esc(e.where) + '</span>' : '') + '</span></div>';
 }
-function calBlock(cal, today) {
-  if (!cal.length) return '<p class="empty">予定はありません</p>';
-  let h = '', cur = '';
-  cal.forEach(e => {
-    if (e.date !== cur) { cur = e.date; h += '<div class="day' + (cur === today ? ' today' : '') + '">' + md(cur) + '（' + wd(cur) + '）' + (cur === today ? ' 今日' : '') + '</div>'; }
-    h += evRow(e);
+// 今日から n 日分のマス。予定は時刻順（終日が先）、期限のあるタスクも同じ日に載せる（純粋関数）
+function calDays(events, classified, today, n) {
+  const tasks = [].concat(classified.today || [], classified.week || []).filter(t => t.due && !t.ongoing);
+  const days = [];
+  for (let i = 0; i < n; i++) {
+    const date = addDays(today, i);
+    const evs = (events || []).filter(e => e.date === date)
+      .slice().sort((a, b) => (a.time || '') < (b.time || '') ? -1 : (a.time || '') > (b.time || '') ? 1 : 0);
+    days.push({ date: date, events: evs, tasks: tasks.filter(t => t.due === date) });
+  }
+  return days;
+}
+
+const CAL_CHIPS = 3;
+function calBlock(days, today) {
+  const sel = days.some(d => d.date === R.calSel) ? R.calSel : today;
+  let h = '<div class="cal">';
+  days.forEach(d => {
+    const dow = new Date(d.date + 'T00:00:00Z').getUTCDay();
+    const chips = d.tasks.map(t => '<span class="chip task">⏰' + esc(plain(t.text)) + '</span>')
+      .concat(d.events.map(e => '<span class="chip' + (e.time ? ' timed' : '') + '">' + esc(e.title) + '</span>'));
+    h += '<button type="button" class="cd' + (d.date === today ? ' today' : '') + (d.date === sel ? ' sel' : '') +
+      (dow === 0 ? ' sun' : dow === 6 ? ' sat' : '') + '" data-act="calday" data-date="' + d.date + '" aria-label="' + md(d.date) + 'の予定">' +
+      '<span class="dh">' + wd(d.date) + '</span><span class="dn">' + (+d.date.slice(8)) + '</span>' +
+      chips.slice(0, CAL_CHIPS).join('') + (chips.length > CAL_CHIPS ? '<span class="more">+' + (chips.length - CAL_CHIPS) + '</span>' : '') +
+      '</button>';
   });
-  return h;
+  h += '</div>';
+  const d = days.filter(x => x.date === sel)[0];
+  h += '<div class="calday"><div class="day' + (sel === today ? ' today' : '') + '">' + md(sel) + '（' + wd(sel) + '）' + (sel === today ? ' 今日' : '') + '</div>';
+  if (!d.events.length && !d.tasks.length) h += '<p class="empty">予定はありません</p>';
+  d.tasks.forEach(t => { h += '<div class="ev"><span class="t task">期限</span><span>' + inline(t.text) + '</span></div>'; });
+  d.events.forEach(e => { h += evRow(e); });
+  return h + '</div>';
 }
 function mailLi(m) {
   const id = 'mail:' + m.url;
@@ -322,7 +367,7 @@ function updateBar() {
 // ---------- 更新ボタン ----------
 // ボタン → 本人のトークンで GitHub に title=refresh の issue を立てる → Mac が1分おきに拾って更新・push。
 // ページは data.enc.json を読み直し、Mac が書いた refresh（段階とメッセージ）を表示する。
-const R = { pressed: 0, req: 0, timer: null, msg: '', err: false, showToken: false };
+const R = { pressed: 0, req: 0, timer: null, msg: '', err: false, showToken: false, calSel: '' };
 const REPO_API = 'https://api.github.com/repos/zh1235789-png/daily-home/issues';
 const WAIT_MS = 7 * 60 * 1000;
 
@@ -391,7 +436,8 @@ async function onAppClick(ev) {
     try { DATA = await load(S.pass); } catch (e) { /* 表示は前のまま */ }
     render();
     requestRefresh();
-  } else if (act === 'settings') { R.showToken = !R.showToken; render(); }
+  } else if (act === 'calday') { R.calSel = b.dataset.date; render(); }
+  else if (act === 'settings') { R.showToken = !R.showToken; render(); }
   else if (act === 'closeToken') { R.showToken = false; render(); }
   else if (act === 'clearToken') { S.gh = ''; save(); R.showToken = false; R.msg = 'トークンを消しました'; R.err = false; render(); }
   else if (act === 'saveToken') {

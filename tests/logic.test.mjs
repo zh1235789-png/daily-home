@@ -94,3 +94,25 @@ test('更新ボタン：Macが7分応答しなければ打ち切る', () => {
   assert.equal(m.done, true);
   assert.equal(m.err, true);
 });
+
+test('カレンダー：今日から7マス、予定は時刻順、期限のあるタスクも同じ日に載る', () => {
+  const ev = [
+    { date: '2026-10-21', time: '19:00', title: '夜の予定' },
+    { date: '2026-10-21', time: '', title: '終日の予定' },
+    { date: '2026-10-25', time: '17:30', title: '食事' },
+    { date: '2026-10-28', time: '', title: '範囲外' },
+  ];
+  const c = { today: [], week: [
+    { id: 'a', text: '**ふるさと納税**', due: '2026-10-23' },
+    { id: 'b', text: '期間中', due: '2026-10-30', ongoing: true },
+    { id: 'c', text: '期限なし', due: null },
+  ] };
+  const days = norm(app.calDays(ev, c, '2026-10-21', 7));
+  assert.equal(days.length, 7);
+  assert.equal(days[0].date, '2026-10-21');
+  assert.equal(days[6].date, '2026-10-27');
+  assert.deepEqual(days[0].events.map((e) => e.title), ['終日の予定', '夜の予定']);
+  assert.deepEqual(days[2].tasks.map((t) => t.id), ['a']);
+  assert.equal(days.flatMap((d) => d.events).some((e) => e.title === '範囲外'), false);
+  assert.equal(days.flatMap((d) => d.tasks).some((t) => t.id === 'b'), false);
+});

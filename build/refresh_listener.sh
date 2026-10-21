@@ -6,6 +6,8 @@
 # ここではそれを見つけたら閉じて、
 #   1) タスクハブ・今日のOETを読み直して push（数十秒）
 #   2) Claude CLI でカレンダー・Gmail を取り直して、もう一度 push（数分）
+# を行う。チェックしたタスクは title=done の issue（本文は ID だけ）で届き、
+#   0) apply_done.py でタスクハブに完了を書き込んで push（数秒）
 # を行う。公開リポジトリなので、本人以外が立てた issue は無視する。
 set -uo pipefail
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
@@ -30,22 +32,42 @@ json.dump({"stage": stage, "message": msg, "at": now, "req": [int(x) for x in id
 EOF
 }
 
-ids=$(gh api "repos/$REPO_SLUG/issues?state=open&creator=$OWNER&per_page=20" \
-  --jq '.[] | select(.title == "refresh") | .number' 2>>"$LOG") || exit 0
-ids=$(printf '%s\n' "$ids" | grep -E '^[0-9]+$' | tr '\n' ' ')
+open_json=$(gh api "repos/$REPO_SLUG/issues?state=open&creator=$OWNER&per_page=30" 2>>"$LOG") || exit 0
+nums() { printf '%s' "$open_json" | jq -r --arg t "$1" '.[] | select(.title == $t) | .number' | grep -E '^[0-9]+$' | tr '\n' ' '; }
+refresh_ids=$(nums refresh)
+# title=done の本文は「id:<10桁の16進>」の行だけ（公開 issue なのでタスクの文面は送らない）
+done_ids=$(nums done)
+task_ids=$(printf '%s' "$open_json" | jq -r '.[] | select(.title == "done") | .body // ""' | grep -oE 'id:[0-9a-f]{10}' | cut -c4- | sort -u | tr '\n' ' ')
+ids="$done_ids $refresh_ids"
 [ -z "${ids// /}" ] && exit 0
 
-# 前の更新がまだ走っていれば、今回の issue は閉じるだけ（続けて押されたとき）
+# 前の更新がまだ走っていれば、更新の依頼は閉じるだけ（続けて押されたとき）。完了の依頼は次の回に回す
 if ! mkdir "$LOCK" 2>/dev/null; then
   if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +20)" ]; then rmdir "$LOCK"; mkdir "$LOCK"; else
-    for n in $ids; do gh api -X PATCH "repos/$REPO_SLUG/issues/$n" -f state=closed >/dev/null 2>&1; done
+    for n in $refresh_ids; do gh api -X PATCH "repos/$REPO_SLUG/issues/$n" -f state=closed >/dev/null 2>&1; done
     exit 0
   fi
 fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 for n in $ids; do gh api -X PATCH "repos/$REPO_SLUG/issues/$n" -f state=closed -f state_reason=completed >/dev/null 2>>"$LOG"; done
-log "refresh requested: $ids"
+log "requested: done=[$done_ids] tasks=[$task_ids] refresh=[$refresh_ids]"
+
+# 0) 完了の反映（Claude 不要・数秒）
+if [ -n "${done_ids// /}" ]; then
+  # shellcheck disable=SC2086
+  if res=$(python3 "$HERE/apply_done.py" $task_ids 2>>"$LOG"); then
+    log "$res"
+    n_ok=$(printf '%s\n' "$res" | grep -c '^反映' || true)
+    status done "完了をObsidianに反映しました（${n_ok}件）"
+  else
+    status error "完了の反映に失敗しました（Macのログを確認）"
+  fi
+  if [ -z "${refresh_ids// /}" ]; then
+    "$HERE/publish.sh" >>"$LOG" 2>&1
+    exit 0
+  fi
+fi
 
 # 1) タスク・OET（Claude 不要）
 status tasks "タスクを更新しました。メールと予定を取得中…"

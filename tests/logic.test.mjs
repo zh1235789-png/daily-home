@@ -116,3 +116,13 @@ test('カレンダー：今日から7マス、予定は時刻順、期限のあ�
   assert.equal(days.flatMap((d) => d.events).some((e) => e.title === '範囲外'), false);
   assert.equal(days.flatMap((d) => d.tasks).some((t) => t.id === 'b'), false);
 });
+
+test('前日以前にチェックしたものは隠し、今日チェックしたものは残す', () => {
+  const items = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  const out = norm(app.hideOld(items, { a: '2026-10-20', b: '2026-10-21' }, '2026-10-21'));
+  assert.deepEqual(out.map((x) => x.id), ['b', 'c']);
+});
+
+test('完了の依頼の本文はIDだけ（文面や不正な値は入れない）', () => {
+  assert.equal(app.doneBody(['0123456789', 'abcdef0123', 'mail:https://x', '<script>']), 'id:0123456789\nid:abcdef0123');
+});

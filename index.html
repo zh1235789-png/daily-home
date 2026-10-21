@@ -135,9 +135,9 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!s || typeof s !== 'object') throw new Error('bad');
-    return { pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {} };
+    return { pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
   } catch (e) {
-    return { pass: '', gh: '', checks: {}, sent: {} };
+    return { pass: '', gh: '', checks: {}, sent: {}, outbox: [] };
   }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存できなくても表示は続ける */ } }
@@ -188,6 +188,22 @@ function classify(hub, today) {
   return out;
 }
 
+// 前日以前にチェックしたものは表示しない（今日チェックしたものは打ち消し線で残す）
+function hideOld(items, checks, today) {
+  return (items || []).filter(it => !(checks[it.id] && checks[it.id] < today));
+}
+// Mac へ送る完了の依頼。公開 issue なので本文には ID だけを書く
+function doneBody(ids) {
+  return ids.filter(x => /^[0-9a-f]{10}$/.test(x)).map(x => 'id:' + x).join('\n');
+}
+function hubIds(data) {
+  const set = new Set();
+  const walk = (arr) => (arr || []).forEach(it => { set.add(it.id); walk(it.children); });
+  const h = (data && data.hub) || {};
+  ['week', 'dated', 'big', 'someday'].forEach(k => walk(h[k]));
+  return set;
+}
+
 // 完了報告の文面。OET・メールは対象外（タスクハブの項目だけ）
 function reportText(items) {
   return items.map(it => '✅完了: ' + plain(it.text)).join('\n');
@@ -234,7 +250,7 @@ function taskLi(it, today, opts) {
     '<input type="checkbox" data-id="' + esc(it.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
     '<div class="body"><div class="txt">' + inline(it.text) + '</div>' +
     (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + '</div></li>';
-  if (o.withChildren) (it.children || []).forEach(c => { if (!c.done) h += taskLi(c, today, { child: true }); });
+  if (o.withChildren) (it.children || []).forEach(c => { if (!c.done && !(S.checks[c.id] && S.checks[c.id] < today)) h += taskLi(c, today, { child: true }); });
   return h;
 }
 
@@ -250,8 +266,9 @@ function render() {
   const today = todayISO();
   const d = DATA;
   const c = classify(d.hub || {}, today);
+  ['overdue', 'today', 'week', 'later', 'undated'].forEach(k => { c[k] = hideOld(c[k], S.checks, today); });
   const cal = ((d.calendar && d.calendar.events) || []).filter(e => e.date >= today && e.date <= addDays(today, 6));
-  const mails = ((d.gmail && d.gmail.items) || []);
+  const mails = ((d.gmail && d.gmail.items) || []).filter(m => !(S.checks['mail:' + m.url] && S.checks['mail:' + m.url] < today));
   const mailOpen = mails.filter(m => !m.waiting && !S.checks['mail:' + m.url]);
   const oet = d.oet;
 
@@ -286,12 +303,14 @@ function render() {
   h += sec('🗓 予定（7日間）', cal.length, calBlock(calDays(cal, c, today, 7), today));
 
   if (c.later.length) h += fold('📅 今後の期限', c.later.length, '<ul>' + c.later.map(it => taskLi(it, today)).join('') + '</ul>');
-  const big = (d.hub.big || []).filter(x => !x.done);
+  const big = hideOld((d.hub.big || []).filter(x => !x.done), S.checks, today);
   if (big.length) h += fold('📌 期限はないが大きいもの', big.length, '<ul>' + big.map(it => taskLi(it, today, { withChildren: true })).join('') + '</ul>');
-  const later2 = c.undated.concat((d.hub.someday || []).filter(x => !x.done));
+  const later2 = c.undated.concat(hideOld((d.hub.someday || []).filter(x => !x.done), S.checks, today));
   if (later2.length) h += fold('🗂 いつか・時期未定', later2.length, '<ul>' + later2.map(it => taskLi(it, today)).join('') + '</ul>');
 
-  h += '<p class="meta" style="text-align:center;margin:18px 0">チェックした項目は下のボタンでリマインダー「Inbox」へ送ると、毎晩21:30にタスクハブへ反映されます</p>';
+  h += '<p class="meta" style="text-align:center;margin:18px 0">' + (S.gh
+    ? 'チェックしたタスクは数秒後にMacへ送られ、1〜2分でObsidianのタスクハブに反映されます'
+    : 'チェックした項目は下のボタンでリマインダー「Inbox」へ送ると、毎晩21:30にタスクハブへ反映されます（⚙でトークンを設定すると自動で反映）') + '</p>';
   app.innerHTML = h;
   updateBar();
 }
@@ -358,7 +377,7 @@ function oetSec(o, today) {
 }
 
 function updateBar() {
-  const p = pendingReports(DATA, S.checks, S.sent);
+  const p = S.gh ? [] : pendingReports(DATA, S.checks, S.sent);
   const bar = document.getElementById('bar');
   bar.classList.toggle('show', p.length > 0);
   document.getElementById('barText').textContent = '完了 ' + p.length + '件';
@@ -394,6 +413,49 @@ function tokenPanel() {
     '<div style="display:flex;gap:8px"><button type="button" data-act="saveToken">保存</button>' +
     (S.gh ? '<button type="button" class="ghost" data-act="clearToken">この端末から消す</button>' : '') +
     '<button type="button" class="ghost" data-act="closeToken">閉じる</button></div></section>';
+}
+
+let flushTimer = null;
+function queueDone(id, checked) {
+  if (checked) { if (S.outbox.indexOf(id) < 0) S.outbox.push(id); }
+  else S.outbox = S.outbox.filter(x => x !== id);
+  save();
+  clearTimeout(flushTimer);
+  if (S.outbox.length) {
+    R.msg = '⏳ ' + S.outbox.length + '件の完了を数秒後にObsidianへ送ります（取り消すならチェックを外す）'; R.err = false;
+    flushTimer = setTimeout(flushDone, 5000);
+  } else if (!checked) { R.msg = ''; }
+  showMsg();
+}
+async function flushDone() {
+  const ids = S.outbox.slice();
+  if (!ids.length || !S.gh) return;
+  let res;
+  try {
+    res = await fetch(REPO_API, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.gh, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'done', body: doneBody(ids) }),
+    });
+  } catch (e) { res = null; }
+  if (!res || !res.ok) {
+    R.msg = '⚠️ 完了を送れませんでした' + (res ? '（' + res.status + '）' : '（通信を確認）') + '。次にチェックしたときにまとめて送ります'; R.err = true; showMsg(); return;
+  }
+  S.outbox = S.outbox.filter(x => ids.indexOf(x) < 0);
+  ids.forEach(x => { S.sent[x] = todayISO(); });
+  save();
+  try { R.req = (await res.json()).number; } catch (e) { R.req = 0; }
+  R.pressed = Date.now();
+  pollRefresh();
+}
+// 画面全体を描き直さずにメッセージだけ差し替える（チェック直後にスクロール位置が飛ばないように）
+function showMsg() {
+  const app = document.getElementById('app');
+  let p = app.querySelector('.rstat');
+  if (!R.msg) { if (p) p.remove(); return; }
+  if (!p) { p = document.createElement('p'); app.querySelector('header').insertAdjacentElement('afterend', p); }
+  p.className = 'rstat' + (R.err ? ' err' : '');
+  p.textContent = R.msg;
 }
 
 async function requestRefresh() {
@@ -486,9 +548,12 @@ async function start() {
   Object.keys(S.checks).forEach(k => { if (!live.has(k)) delete S.checks[k]; });
   Object.keys(S.sent).forEach(k => { if (!live.has(k)) delete S.sent[k]; });
   save();
+  S.outbox = S.outbox.filter(x => live.has(x));
+  save();
   document.getElementById('lock').hidden = true;
   document.getElementById('app').hidden = false;
   render();
+  if (S.gh && S.outbox.length && !flushTimer) flushTimer = setTimeout(flushDone, 1000);
 }
 
 function bind() {
@@ -501,9 +566,17 @@ function bind() {
   document.getElementById('app').addEventListener('change', (ev) => {
     const t = ev.target;
     if (!t || !t.dataset || !t.dataset.id) return;
-    if (t.checked) S.checks[t.dataset.id] = todayISO(); else { delete S.checks[t.dataset.id]; delete S.sent[t.dataset.id]; }
+    const id = t.dataset.id;
+    if (!t.checked && S.gh && S.sent[id]) {
+      // すでにObsidianへ反映済み：ここで外しても戻らないので、チェックは残す
+      t.checked = true;
+      R.msg = 'このタスクはObsidianに反映済みです。戻すときはObsidianのタスクハブで直してください'; R.err = true; showMsg();
+      return;
+    }
+    if (t.checked) S.checks[id] = todayISO(); else { delete S.checks[id]; delete S.sent[id]; }
     save();
     t.closest('li').classList.toggle('done', t.checked);
+    if (S.gh && hubIds(DATA).has(id)) queueDone(id, t.checked);
     updateBar();
   });
   document.getElementById('shareBtn').addEventListener('click', async () => {

@@ -218,6 +218,7 @@ def build(today=None):
         "oet": parse_oet_note(OET.read_text()) if OET.exists() else None,
         "calendar": load_json(CONF / "calendar.json", {"updated": None, "events": []}),
         "gmail": load_json(CONF / "gmail.json", {"updated": None, "items": []}),
+        "refresh": load_json(CONF / "status.json", None),
     }
     return data
 

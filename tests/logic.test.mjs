@@ -73,3 +73,22 @@ test('完了報告はチェック済み・未送信のタスクハブ項目だ�
 test('HTMLはエスケープされ、強調と打ち消しだけ残る', () => {
   assert.equal(app.inline('<b>x</b> **強** ~~消~~ [[ノート|表示]]'), '&lt;b&gt;x&lt;/b&gt; <b>強</b> <s>消</s> 表示');
 });
+
+test('更新ボタン：押す前の状態は無視し、押した後の段階を表示する', () => {
+  const pressed = Date.parse('2026-10-21T08:00:00+09:00');
+  const old = { refresh: { stage: 'done', message: '更新しました', at: '2026-10-21T07:00:00+09:00' } };
+  assert.equal(app.refreshMessage(old, pressed, pressed + 30000).done, false);
+  const mid = { refresh: { stage: 'tasks', message: 'メール取得中', at: '2026-10-21T08:01:00+09:00' } };
+  assert.deepEqual(norm(app.refreshMessage(mid, pressed, pressed + 60000)), { text: '⏳ メール取得中', done: false, err: false });
+  const fin = { refresh: { stage: 'done', message: '更新しました', at: '2026-10-21T08:03:00+09:00' } };
+  assert.equal(app.refreshMessage(fin, pressed, pressed + 180000).done, true);
+  const bad = { refresh: { stage: 'error', message: '未ログイン', at: '2026-10-21T08:01:00+09:00' } };
+  assert.equal(app.refreshMessage(bad, pressed, pressed + 60000).err, true);
+});
+
+test('更新ボタン：Macが7分応答しなければ打ち切る', () => {
+  const pressed = Date.parse('2026-10-21T08:00:00+09:00');
+  const m = app.refreshMessage({ refresh: null }, pressed, pressed + 8 * 60000);
+  assert.equal(m.done, true);
+  assert.equal(m.err, true);
+});

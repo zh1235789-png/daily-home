@@ -78,6 +78,12 @@ button {
   font: inherit; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button { color: #10202e; } }
+header .right { display: flex; align-items: center; gap: 8px; }
+.icon-btn { background: var(--chip); color: var(--ink); font-weight: 400; padding: 6px 10px; font-size: 14px; }
+.rstat { font-size: 13px; color: var(--sub); margin: -4px 0 10px; }
+.rstat.err { color: var(--red); }
+.token input { width: 100%; font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin: 6px 0; }
+.token ol { margin: 4px 0 8px; padding-left: 20px; font-size: 13px; color: var(--sub); }
 button.ghost { background: var(--chip); color: var(--ink); font-weight: 400; }
 #lock { max-width: 360px; margin: 18vh auto 0; padding: 0 16px; text-align: center; }
 #lock input { width: 100%; font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); margin: 12px 0; }
@@ -109,9 +115,9 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!s || typeof s !== 'object') throw new Error('bad');
-    return { pass: typeof s.pass === 'string' ? s.pass : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {} };
+    return { pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {} };
   } catch (e) {
-    return { pass: '', checks: {}, sent: {} };
+    return { pass: '', gh: '', checks: {}, sent: {} };
   }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存できなくても表示は続ける */ } }
@@ -231,7 +237,11 @@ function render() {
 
   const ageH = (Date.now() - Date.parse(d.generated)) / 3600000;
   let h = '<header><h1>' + md(today) + '（' + wd(today) + '）</h1><div class="meta' + (ageH > 36 ? ' stale' : '') + '">' +
-    '更新 ' + esc(String(d.generated).slice(5, 16).replace('T', ' ')) + (ageH > 36 ? '<br>データが古い' : '') + '</div></header>';
+    '更新 ' + esc(String(d.generated).slice(5, 16).replace('T', ' ')) + (ageH > 36 ? '<br>データが古い' : '') + '</div>' +
+    '<div class="right"><button type="button" class="icon-btn" data-act="refresh" aria-label="更新">🔄 更新</button>' +
+    '<button type="button" class="icon-btn" data-act="settings" aria-label="設定">⚙</button></div></header>';
+  if (R.msg) h += '<p class="rstat' + (R.err ? ' err' : '') + '">' + esc(R.msg) + '</p>';
+  if (R.showToken) h += tokenPanel();
 
   h += '<div class="summary">' +
     (c.overdue.length ? '<span class="pill red">期限切れ ' + c.overdue.length + '</span>' : '') +
@@ -306,6 +316,85 @@ function updateBar() {
   const bar = document.getElementById('bar');
   bar.classList.toggle('show', p.length > 0);
   document.getElementById('barText').textContent = '完了 ' + p.length + '件';
+}
+
+// ---------- 更新ボタン ----------
+// ボタン → 本人のトークンで GitHub に title=refresh の issue を立てる → Mac が1分おきに拾って更新・push。
+// ページは data.enc.json を読み直し、Mac が書いた refresh（段階とメッセージ）を表示する。
+const R = { pressed: 0, timer: null, msg: '', err: false, showToken: false };
+const REPO_API = 'https://api.github.com/repos/zh1235789-png/daily-home/issues';
+const WAIT_MS = 7 * 60 * 1000;
+
+// 押した時刻以降に Mac が書いた状態だけを見る（純粋関数）
+function refreshMessage(data, pressed, now) {
+  const r = data && data.refresh;
+  if (r && Date.parse(r.at) >= pressed - 5000) {
+    if (r.stage === 'done') return { text: '✅ ' + r.message, done: true, err: false };
+    if (r.stage === 'error') return { text: '⚠️ ' + r.message, done: true, err: true };
+    return { text: '⏳ ' + r.message, done: false, err: false };
+  }
+  if (now - pressed > WAIT_MS) return { text: '⚠️ Macから応答がありません（スリープ中かもしれません）', done: true, err: true };
+  return { text: '⏳ Macに更新を頼みました（1〜2分で反映、メールはさらに数分）', done: false, err: false };
+}
+
+function tokenPanel() {
+  return '<section class="token"><h2>🔑 更新ボタンの設定（この端末だけ）</h2>' +
+    '<ol><li><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">GitHubのトークン作成ページ</a>を開く</li>' +
+    '<li>Repository access：<b>Only select repositories → daily-home</b></li>' +
+    '<li>Permissions：<b>Issues → Read and write</b>（他は付けない）。期限は1年など</li>' +
+    '<li>作ったトークンを下に貼って保存</li></ol>' +
+    '<input id="ghToken" type="password" autocomplete="off" aria-label="GitHubトークン" placeholder="github_pat_…">' +
+    '<div style="display:flex;gap:8px"><button type="button" data-act="saveToken">保存</button>' +
+    (S.gh ? '<button type="button" class="ghost" data-act="clearToken">この端末から消す</button>' : '') +
+    '<button type="button" class="ghost" data-act="closeToken">閉じる</button></div></section>';
+}
+
+async function requestRefresh() {
+  if (!S.gh) { R.showToken = true; R.msg = '更新ボタンを使うには、最初にトークンを設定してください'; R.err = false; render(); return; }
+  let res;
+  try {
+    res = await fetch(REPO_API, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + S.gh, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'refresh', body: 'デイリーホームの更新ボタンから' }),
+    });
+  } catch (e) {
+    R.msg = '⚠️ GitHubにつながりません（通信を確認）'; R.err = true; render(); return;
+  }
+  if (res.status === 401 || res.status === 403 || res.status === 404) {
+    R.msg = '⚠️ トークンが使えません（期限切れか権限不足）。⚙から設定し直してください'; R.err = true; render(); return;
+  }
+  if (!res.ok) { R.msg = '⚠️ GitHubでエラー（' + res.status + '）'; R.err = true; render(); return; }
+  R.pressed = Date.now();
+  pollRefresh();
+}
+
+async function pollRefresh() {
+  clearTimeout(R.timer);
+  try { DATA = await load(S.pass); } catch (e) { /* 次の回で読む */ }
+  const m = refreshMessage(DATA, R.pressed, Date.now());
+  R.msg = m.text; R.err = m.err;
+  render();
+  R.timer = m.done ? null : setTimeout(pollRefresh, 15000);
+}
+
+async function onAppClick(ev) {
+  const b = ev.target && ev.target.closest ? ev.target.closest('[data-act]') : null;
+  if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'refresh') {
+    R.msg = '⏳ 最新のデータを読み込み中…'; R.err = false; render();
+    try { DATA = await load(S.pass); } catch (e) { /* 表示は前のまま */ }
+    render();
+    requestRefresh();
+  } else if (act === 'settings') { R.showToken = !R.showToken; render(); }
+  else if (act === 'closeToken') { R.showToken = false; render(); }
+  else if (act === 'clearToken') { S.gh = ''; save(); R.showToken = false; R.msg = 'トークンを消しました'; R.err = false; render(); }
+  else if (act === 'saveToken') {
+    const v = (document.getElementById('ghToken').value || '').trim();
+    if (!v) return;
+    S.gh = v; save(); R.showToken = false; R.msg = 'トークンを保存しました。🔄 更新 を押せます'; R.err = false; render();
+  }
 }
 
 // ---------- 復号 ----------
@@ -386,7 +475,8 @@ function bind() {
     save();
     render();
   });
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && DATA) start(); });
+  document.getElementById('app').addEventListener('click', onAppClick);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && DATA && !R.timer) start(); });
 }
 
 if (typeof document !== 'undefined' && document.getElementById('app') && typeof document.getElementById('app').addEventListener === 'function') {

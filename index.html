@@ -31,7 +31,7 @@ body {
   padding: env(safe-area-inset-top) 0 calc(80px + env(safe-area-inset-bottom));
 }
 main { max-width: 720px; margin: 0 auto; padding: 0 16px; }
-header { padding: 18px 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+header { padding: 18px 0 8px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 h1 { font-size: 24px; margin: 0; letter-spacing: .02em; }
 .meta { color: var(--sub); font-size: 12px; text-align: right; }
 .meta.stale { color: var(--red); font-weight: 600; }
@@ -77,9 +77,10 @@ a.note::before { content: "📝 "; }
 button {
   font: inherit; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button { color: #10202e; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button:not(.ghost):not(.icon-btn) { color: #10202e; } }
 header .right { display: flex; align-items: center; gap: 8px; }
-.icon-btn { background: var(--chip); color: var(--ink); font-weight: 400; padding: 6px 10px; font-size: 14px; }
+.icon-btn { background: var(--chip); color: var(--ink); font-weight: 400; padding: 6px 10px; font-size: 14px; white-space: nowrap; }
+.icon-btn:disabled { opacity: .6; }
 .rstat { font-size: 13px; color: var(--sub); margin: -4px 0 10px; }
 .rstat.err { color: var(--red); }
 .token input { width: 100%; font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin: 6px 0; }
@@ -236,9 +237,9 @@ function render() {
   const oet = d.oet;
 
   const ageH = (Date.now() - Date.parse(d.generated)) / 3600000;
-  let h = '<header><h1>' + md(today) + '（' + wd(today) + '）</h1><div class="meta' + (ageH > 36 ? ' stale' : '') + '">' +
+  let h = '<header><h1>' + md(today) + '（' + wd(today) + '）</h1><div class="right"><div class="meta' + (ageH > 36 ? ' stale' : '') + '">' +
     '更新 ' + esc(String(d.generated).slice(5, 16).replace('T', ' ')) + (ageH > 36 ? '<br>データが古い' : '') + '</div>' +
-    '<div class="right"><button type="button" class="icon-btn" data-act="refresh" aria-label="更新"' + (R.timer ? ' disabled' : '') + '>' + (R.timer ? '⏳ 更新中' : '🔄 更新') + '</button>' +
+    '<button type="button" class="icon-btn" data-act="refresh" aria-label="更新"' + (R.timer ? ' disabled' : '') + '>' + (R.timer ? '⏳ 更新中' : '🔄 更新') + '</button>' +
     '<button type="button" class="icon-btn" data-act="settings" aria-label="設定">⚙</button></div></header>';
   if (R.msg) h += '<p class="rstat' + (R.err ? ' err' : '') + '">' + esc(R.msg) + '</p>';
   if (R.showToken) h += tokenPanel();

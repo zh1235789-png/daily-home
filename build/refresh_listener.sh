@@ -65,11 +65,19 @@ prompt="$(awk 'f>=2{print} /^---$/{f++}' "$SKILL")"
 tools="$(grep -v '^#' "$CONF/claude_allowed_tools" 2>/dev/null | tr '\n' ' ')"
 cd "$HOME/daily-home" || exit 1
 # メール本文は信頼できない入力なので、送信・削除系は与えず、読み取りと所定ファイルの書き込みだけ許可する
+# ファイルの許可は Edit(~/…) で書き（Write(…) やスラッシュ1本の絶対パスは効かない）、
+# プロジェクト外の設定フォルダは --add-dir で作業範囲に入れる。公開はこのスクリプトが後で行う。
+# claude が 0 で終わっても書けていないことがあるので、ファイルが新しくなったかで成否を判断する
+prompt="$prompt
+
+（このコマンドライン実行では手順3の publish.sh は実行しない。2つのJSONを書いたら報告して終わる。公開は呼び出し側が行う）"
+before="$(stat -f %m "$CONF/gmail.json" "$CONF/calendar.json" 2>/dev/null | tr '\n' ' ')"
 # shellcheck disable=SC2086
-if claude -p "$prompt" --model sonnet \
-     --allowedTools Read "Write($CONF/calendar.json)" "Write($CONF/gmail.json)" \
-       "Bash($HOME/daily-home/build/publish.sh)" "Bash(~/daily-home/build/publish.sh)" $tools \
-     >>"$LOG" 2>&1; then
+claude -p "$prompt" --model sonnet --add-dir "$CONF" \
+  --allowedTools Read "Edit(~/.config/daily-home/calendar.json)" "Edit(~/.config/daily-home/gmail.json)" $tools \
+  >>"$LOG" 2>&1
+after="$(stat -f %m "$CONF/gmail.json" "$CONF/calendar.json" 2>/dev/null | tr '\n' ' ')"
+if [ "$before" != "$after" ]; then
   status done "更新しました"
 else
   status error "メールと予定の取得に失敗しました（Macのログを確認）"

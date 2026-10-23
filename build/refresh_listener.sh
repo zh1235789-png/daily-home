@@ -32,6 +32,26 @@ json.dump({"stage": stage, "message": msg, "at": now, "req": [int(x) for x in id
 EOF
 }
 
+# 定時の公開（Claude 不要）。昼12:50・夜21:50を過ぎたら、その日1回ずつタスクハブと今日のOETだけ読み直し、
+# 変わっていれば push する（publish.sh が「変更なし」で正常終了したときも、その回は済みとする）。
+# 予定・メールは朝夕のスケジュールタスク（Claude）が書いた分をそのまま使う。Mac が寝ていたら起きた後に追いつく。
+now_hm=$(date +%H%M); today=$(date +%F)
+for slot in 1250 2150; do
+  stamp="$CONF/scheduled-$today-$slot"
+  # 失敗したら印を付けず、10分おきに再試行する
+  [ -n "$(find "$stamp.fail" -mmin -10 2>/dev/null)" ] && continue
+  if [ "$now_hm" -ge "$slot" ] && [ ! -e "$stamp" ] && mkdir "$LOCK" 2>/dev/null; then
+    log "scheduled publish $slot"
+    if "$HERE/publish.sh" >>"$LOG" 2>&1; then
+      touch "$stamp"; rm -f "$stamp.fail"
+    else
+      touch "$stamp.fail"; log "scheduled publish $slot failed (10分後に再試行)"
+    fi
+    rmdir "$LOCK"
+  fi
+done
+find "$CONF" -maxdepth 1 -name 'scheduled-*' -mtime +3 -delete 2>/dev/null
+
 open_json=$(gh api "repos/$REPO_SLUG/issues?state=open&creator=$OWNER&per_page=30" 2>>"$LOG") || exit 0
 nums() { printf '%s' "$open_json" | jq -r --arg t "$1" '.[] | select(.title == $t) | .number' | grep -E '^[0-9]+$' | tr '\n' ' '; }
 refresh_ids=$(nums refresh)

@@ -234,7 +234,7 @@ def parse_routine_note(md, stem):
     """09_Projects/Claude Routines/YYYY-MM-DD_名前.md を1件分の dict にする。"""
     m = re.match(r"^---\n(.*?)\n---\n?(.*)$", md, re.S)
     fm, body = (m.group(1), m.group(2)) if m else ("", md)
-    date = _fm_value(fm, "date") or stem[:10]
+    date = stem[:10]  # 選別に使うファイル名の日付と表示をそろえる（frontmatter の date は見ない）
     name = _fm_value(fm, "routine") or stem[11:]
     body = re.sub(r"^# .*$", "", body, count=1, flags=re.M)
     headline = _fm_value(fm, "headline")

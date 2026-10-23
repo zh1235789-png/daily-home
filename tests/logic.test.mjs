@@ -126,3 +126,20 @@ test('前日以前にチェックしたものは隠し、今日チェックし�
 test('完了の依頼の本文はIDだけ（文面や不正な値は入れない）', () => {
   assert.equal(app.doneBody(['0123456789', 'abcdef0123', 'mail:https://x', '<script>']), 'id:0123456789\nid:abcdef0123');
 });
+
+test('自動作業：今日と昨日の記録だけを出し、要約・ノートへのリンクを表示する', () => {
+  const data = { routines: [
+    { id: 'r1', date: '2026-10-21', time: '09:12', name: '泌尿器科週次アップデート', headline: '3件: THOR-2続報', lines: [], note: '2026-10-21_泌尿器科週次アップデート', output: '泌尿器科アップデート_2026-10-21' },
+    { id: 'r2', date: '2026-10-20', time: '22:00', name: 'Downloads整理', headline: '', lines: ['2件を移動'], note: '2026-10-20_Downloads整理', output: '' },
+    { id: 'r3', date: '2026-10-19', time: '10:00', name: '古い', headline: 'x', lines: [], note: 'n', output: '' },
+  ] };
+  const list = norm(app.routineList(data, '2026-10-21'));
+  assert.deepEqual(list.map((r) => r.id), ['r1', 'r2']);
+  const html = app.routineSec(app.routineList(data, '2026-10-21'), '2026-10-21');
+  assert.match(html, /今日 09:12/);
+  assert.match(html, /昨日 22:00/);
+  assert.match(html, /3件: THOR-2続報/);
+  assert.match(html, /2件を移動/);
+  assert.match(html, /file=%E6%B3%8C/); // 成果物ノートへのリンク
+  assert.equal(norm(app.routineList({}, '2026-10-21')).length, 0);
+});

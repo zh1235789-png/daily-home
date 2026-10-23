@@ -3,7 +3,8 @@ import datetime as dt
 import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from build import parse_due, parse_hub
+import tempfile
+from build import parse_due, parse_hub, parse_routines
 
 T = dt.date(2026, 10, 20)
 
@@ -44,6 +45,33 @@ class Hub(unittest.TestCase):
         self.assertEqual(h["week"][1]["text"], "**〜10/11 電話**")
         self.assertTrue(h["dated"][0]["done"])
         self.assertEqual(h["dated"][1]["notes"], [])
+
+
+class Routines(unittest.TestCase):
+    def test_today_and_yesterday_only_newest_first(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "2026-10-20_泌尿器科週次アップデート.md").write_text(
+                '---\ndate: 2026-10-20\nroutine: 泌尿器科週次アップデート\ntime: "09:12"\n'
+                'headline: "3件: THOR-2続報など"\noutput: "泌尿器科アップデート_2026-10-20"\n'
+                'tags:\n  - claude-routine\n---\n\n# 泌尿器科週次アップデート — 2026-10-20 09:12\n\n本文\n')
+            # 要約なしの古い形式：本文の短い行を拾う（見出し・表は飛ばす）
+            (p / "2026-10-19_iCloud月次ファイル整理.md").write_text(
+                '---\ndate: 2026-10-19\nroutine: iCloud月次ファイル整理\ntags:\n  - claude-routine\n---\n\n'
+                '# iCloud月次ファイル整理 — 2026-10-19 10:05\n\n## 実行結果\n\n✅ 移動したファイル\n- なし\n| a | b |\n')
+            (p / "2026-10-18_古い.md").write_text("---\ndate: 2026-10-18\n---\n")
+            (p / "メモ.md").write_text("x")
+            r = parse_routines(p, T)
+        self.assertEqual([x["date"] for x in r], ["2026-10-20", "2026-10-19"])
+        self.assertEqual(r[0]["headline"], "3件: THOR-2続報など")
+        self.assertEqual(r[0]["output"], "泌尿器科アップデート_2026-10-20")
+        self.assertEqual(r[0]["time"], "09:12")
+        self.assertEqual(r[0]["lines"], [])
+        self.assertEqual(r[1]["name"], "iCloud月次ファイル整理")
+        self.assertEqual(r[1]["lines"], ["✅ 移動したファイル", "なし"])
+
+    def test_missing_folder(self):
+        self.assertEqual(parse_routines(Path("/nonexistent/x"), T), [])
 
 
 if __name__ == "__main__":

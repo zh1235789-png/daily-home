@@ -85,7 +85,9 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .day.today { color: var(--accent); }
 .lead { font-size: 13px; color: var(--sub); margin: 0 0 6px; padding-left: 10px; border-left: 3px solid var(--line); }
 .empty { color: var(--sub); font-size: 13px; padding: 4px 0; }
-.mail .from { font-size: 12px; color: var(--sub); }
+.mail .from, .routine .from { font-size: 12px; color: var(--sub); }
+.routine .rl { font-size: 13px; color: var(--sub); }
+.pill.acc { background: var(--acc-bg); color: var(--accent); font-weight: 600; }
 .wait { opacity: .6; }
 #bar {
   position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -284,7 +286,8 @@ function render() {
     (c.overdue.length ? '<span class="pill red">期限切れ ' + c.overdue.length + '</span>' : '') +
     '<span class="pill' + (c.today.length ? ' amber' : '') + '">今日 ' + c.today.length + '</span>' +
     '<span class="pill">今週 ' + c.week.length + '</span>' +
-    '<span class="pill' + (mailOpen.length ? ' amber' : '') + '">メール ' + mailOpen.length + '</span></div>';
+    '<span class="pill' + (mailOpen.length ? ' amber' : '') + '">メール ' + mailOpen.length + '</span>' +
+    (routineList(d, today).length ? '<span class="pill acc">🤖 自動作業 ' + routineList(d, today).length + '</span>' : '') + '</div>';
 
   if (c.overdue.length) h += sec('⚠️ 期限切れ', c.overdue.length, '<ul>' + c.overdue.map(it => taskLi(it, today)).join('') + '</ul>', 'red');
 
@@ -295,6 +298,9 @@ function render() {
 
   h += sec('✉️ 対応が必要なメール', mailOpen.length,
     mails.length ? '<ul>' + mails.map(m => mailLi(m)).join('') + '</ul>' : '<p class="empty">要対応のメールはありません</p>');
+
+  const runs = routineList(d, today);
+  if (runs.length) h += routineSec(runs, today);
 
   if (oet) h += oetSec(oet, today);
 
@@ -361,6 +367,25 @@ function mailLi(m) {
     '<div class="body"><div class="from">' + esc(m.from) + ' · ' + esc(md(m.date)) + (m.waiting ? ' · 返信待ち' : '') + '</div>' +
     '<div class="txt"><a href="' + esc(m.url) + '" target="_blank" rel="noopener">' + esc(m.subject) + '</a></div>' +
     '<div class="tags"><span>' + esc(m.action) + '</span></div></div></li>';
+}
+// ルーティン（まとめ作成・ファイル整理）の実行記録のうち今日と昨日の分（純粋関数）
+function routineList(data, today) {
+  const y = addDays(today, -1);
+  return ((data && data.routines) || []).filter(r => r.date === today || r.date === y);
+}
+function routineSec(runs, today) {
+  const h = '<ul>' + runs.map(r => {
+    const when = (r.date === today ? '今日' : '昨日') + (r.time ? ' ' + r.time : '');
+    const lines = r.headline ? [r.headline] : (r.lines || []);
+    const tags = [];
+    if (r.output) tags.push(noteLink(r.output));
+    if (r.note) tags.push(noteLink(r.note));
+    return '<li class="task routine"><div class="body"><div class="from">' + esc(when) + '</div>' +
+      '<div class="txt"><b>' + esc(r.name) + '</b></div>' +
+      lines.map(l => '<div class="rl">' + inline(l) + '</div>').join('') +
+      (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + '</div></li>';
+  }).join('') + '</ul>';
+  return sec('🤖 自動作業（今日・昨日）', runs.length, h);
 }
 function oetSec(o, today) {
   const stale = o.date !== today;

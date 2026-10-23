@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """デイリーホームのデータを作る。
 
-Obsidian のタスクハブ・今日のOETノート、それと ~/.config/daily-home/ に置いた
+Obsidian のタスクハブ・今日のOETノート・ルーティンの実行記録（Claude Routines）、それと ~/.config/daily-home/ に置いた
 calendar.json / gmail.json（Claude のスケジュールタスクが書く）をまとめて、
 パスフレーズで暗号化した data.enc.json をリポジトリ直下に書き出す。
 
@@ -22,6 +22,7 @@ HOME = Path.home()
 VAULT = HOME / "Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian Vault"
 HUB = VAULT / "03_Personal/03.1_Tasks/タスクハブ.md"
 OET = VAULT / "📌 今日のOET学習.md"
+ROUTINES = VAULT / "09_Projects/Claude Routines"
 CONF = HOME / ".config/daily-home"
 REPO = Path(__file__).resolve().parent.parent
 ITERATIONS = 200_000
@@ -200,6 +201,75 @@ def parse_oet_note(md):
             "menu": menu, "record": record}
 
 
+# ---------- 自動作業（ルーティンの実行記録） ----------
+
+def _fm_value(fm, key):
+    m = re.search(rf"^{key}:\s*(.*)$", fm, re.M)
+    if not m:
+        return ""
+    v = m.group(1).strip()
+    if v.startswith('"'):
+        try:
+            return json.loads(v)
+        except ValueError:
+            return v.strip('"')
+    return v
+
+
+def summary_lines(body, limit=3):
+    """要約が無い古い記録用：本文から短い行を最大 limit 行拾う（見出し・表・空行は飛ばす）。"""
+    out = []
+    for line in body.splitlines():
+        t = line.strip()
+        if not t or t.startswith(("#", "|", "---", "```")):
+            continue
+        t = re.sub(r"^[-*]\s+", "", t)
+        out.append(t[:80])
+        if len(out) >= limit:
+            break
+    return out
+
+
+def parse_routine_note(md, stem):
+    """09_Projects/Claude Routines/YYYY-MM-DD_名前.md を1件分の dict にする。"""
+    m = re.match(r"^---\n(.*?)\n---\n?(.*)$", md, re.S)
+    fm, body = (m.group(1), m.group(2)) if m else ("", md)
+    date = _fm_value(fm, "date") or stem[:10]
+    name = _fm_value(fm, "routine") or stem[11:]
+    body = re.sub(r"^# .*$", "", body, count=1, flags=re.M)
+    headline = _fm_value(fm, "headline")
+    return {
+        "id": item_id("routine", stem),
+        "date": date,
+        "time": _fm_value(fm, "time"),
+        "name": name,
+        "headline": headline,
+        "lines": [] if headline else summary_lines(body),
+        "note": stem,
+        "output": _fm_value(fm, "output"),
+    }
+
+
+def parse_routines(folder, today, days=2):
+    """今日と昨日（days 日分）の実行記録を新しい順に返す。"""
+    since = (today - dt.timedelta(days=days - 1)).isoformat()
+    items = []
+    try:
+        files = sorted(folder.glob("*.md"))
+    except OSError:
+        return items
+    for p in files:
+        stem = p.stem
+        if not re.match(r"^\d{4}-\d{2}-\d{2}_", stem) or stem[:10] < since or stem[:10] > today.isoformat():
+            continue
+        try:
+            items.append(parse_routine_note(p.read_text(encoding="utf-8"), stem))
+        except OSError:
+            continue
+    items.sort(key=lambda x: (x["date"], x["time"]), reverse=True)
+    return items
+
+
 # ---------- 組み立て・暗号化 ----------
 
 def load_json(path, default):
@@ -219,6 +289,7 @@ def build(today=None):
         "calendar": load_json(CONF / "calendar.json", {"updated": None, "events": []}),
         "gmail": load_json(CONF / "gmail.json", {"updated": None, "items": []}),
         "refresh": load_json(CONF / "status.json", None),
+        "routines": parse_routines(ROUTINES, today),
     }
     return data
 

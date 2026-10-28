@@ -32,3 +32,11 @@ test('新規が無い日は総数を出す', () => {
   assert.match(h, /📉 下落アラート <span class="n">1<\/span>/);
   assert.match(h, /新しく基準を超えた銘柄はありません/);
 });
+
+test('新規が多い日は8件まで出して残りは折りたたみへ', () => {
+  const many = Array.from({ length: 11 }, (_, i) => ({ ticker: 'T' + i, group: 'other', label: 'Hanako30', dd: -31 - i, since: '2026-10-28' }));
+  const h = app.stockSec({ ...stocks, alerts: many }, '2026-10-28');
+  assert.match(h, /（新規） <span class="n">11<\/span>/);
+  assert.match(h, /ほか 3 件は下のグループ別一覧に/);
+  assert.equal((h.split('<details>')[0].match(/class="ev sk/g) || []).length, 8);
+});

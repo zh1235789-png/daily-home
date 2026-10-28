@@ -158,7 +158,7 @@ button.ghost { background: var(--chip); color: var(--ink); font-weight: 400; }
 'use strict';
 const KEY = 'dh.v1';
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
-const TABS = ['home', 'eng', 'invest'];
+const TABS = ['home', 'eng', 'health', 'invest'];
 let DATA = null;
 let S = loadState();
 
@@ -314,6 +314,8 @@ function render() {
     h += investTab(d, today);
   } else if (S.tab === 'eng') {
     h += engTab(d, today);
+  } else if (S.tab === 'health') {
+    h += healthTab(d, today);
   } else {
   h += '<div class="summary">' +
     (c.overdue.length ? '<span class="pill red">期限切れ ' + c.overdue.length + '</span>' : '') +
@@ -328,8 +330,6 @@ function render() {
   h += sec('📌 今日', c.today.length,
     (c.today.length ? '<ul>' + c.today.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">期限が今日のタスクはありません</p>') +
     (todayEv.length ? '<div class="day today">予定</div>' + todayEv.map(evRow).join('') : ''));
-
-  if (d.training) h += trainSec(d.training, today);
 
   h += sec('✉️ 対応が必要なメール', mailOpen.length,
     mails.length ? '<ul>' + mails.map(m => mailLi(m)).join('') + '</ul>' : '<p class="empty">要対応のメールはありません</p>');
@@ -461,7 +461,7 @@ function tabNav(tab, d, today) {
   const fresh = d && d.stocks ? stockGroups(d.stocks, today).fresh.length : 0;
   const btn = (key, ic, label, badge) => '<button type="button" class="tb' + (tab === key ? ' sel' : '') + '" data-act="tab" data-tab="' + key + '" aria-pressed="' + (tab === key) + '">' +
     '<span class="ic">' + ic + '</span>' + label + (badge ? '<span class="badge">' + badge + '</span>' : '') + '</button>';
-  return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('eng', '🇬🇧', '英語', engLeft(d, S.checks, today)) + btn('invest', '📈', '投資', fresh) + '</nav>';
+  return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('eng', '🇬🇧', '英語', engLeft(d, S.checks, today)) + btn('health', '🏃', '健康', trainLeft(d, S.checks, today)) + btn('invest', '📈', '投資', fresh) + '</nav>';
 }
 // ---------- 英語タブ ----------
 // 毎日の英語ルーティン。Speak は月・木・土日（土日はどちらか1回）。チェックはこの端末だけに残る（純粋関数）
@@ -501,6 +501,57 @@ function engTab(d, today) {
   h += sec('🎯 OET 目標', null, '<p class="lead">受験 <b>2027年1〜2月</b>（未申込）／必要スコア L350・R360・W350・S360</p>');
   h += sec('🔗 英語のアプリ', null, '<div class="tags">' + ENG_APPS.map(a =>
     '<a href="https://zh1235789-png.github.io/' + a[1] + '/" target="_blank" rel="noopener">' + esc(a[0]) + '</a>').join('') + '</div>');
+  return h;
+}
+// ---------- 健康タブ ----------
+// 今日のラン・筋トレのチェック項目の ID（ランが「なし」の日は筋トレだけ。休みの日は空）（純粋関数）
+function trainIds(training, today) {
+  const slot = trainingFor(training, today);
+  if (!slot) return [];
+  return (/^なし/.test(slot.run) ? [] : ['train:' + today + ':run']).concat(['train:' + today + ':gym']);
+}
+function trainLeft(d, checks, today) {
+  return trainIds(d && d.training, today).filter(id => !checks[id]).length;
+}
+// 日種別の目標カロリー（08_Decisions/2026-09-19-目標カロリーを実測TDEEに合わせる）（純粋関数）
+const DAY_TARGETS = {
+  both: ['両方（筋トレ＋有酸素）', 1900, 152, 55, 200],
+  gym: ['筋トレ', 1850, 148, 56, 190],
+  cardio: ['有酸素', 1750, 149, 54, 166],
+  rest: ['休息', 1650, 148, 55, 140],
+};
+function dayKind(training, iso) {
+  const slot = trainingFor(training, iso);
+  if (!slot) return 'rest';
+  return /^なし/.test(slot.run) ? 'gym' : 'both';
+}
+function foodSec(training, today) {
+  const t = DAY_TARGETS[dayKind(training, today)];
+  return sec('🍚 今日の食事の目標', null,
+    '<div class="from">今日は「' + esc(t[0]) + '」の日</div>' +
+    '<p class="lead"><b>' + t[1].toLocaleString() + ' kcal</b> ／ P ' + t[2] + 'g・F ' + t[3] + 'g・C ' + t[4] + 'g</p>' +
+    '<div class="tags"><span>Pは150g前後で十分（多すぎない）</span><span>クレアチンは5g</span><span>塩分控えめ</span></div>');
+}
+// 今日から7日分の運動の予定（純粋関数）
+function weekPlanSec(training, today) {
+  let h = '';
+  for (let i = 0; i < 7; i++) {
+    const iso = addDays(today, i);
+    const slot = trainingFor(training, iso);
+    const what = slot ? esc(slot.focus) + (/^なし/.test(slot.run) ? '' : ' ＋ ' + esc(slot.run.replace(/（.*）/, ''))) : '<span class="meta">休み（手術日）</span>';
+    h += '<div class="ev"><span class="t">' + (i === 0 ? '今日' : wd(iso)) + '</span><span>' + what + '</span></div>';
+  }
+  return sec('📅 今週の運動', null, h);
+}
+function healthTab(d, today) {
+  if (!d.training) return sec('🏃 ラン・筋トレ', null, '<p class="empty">筋トレAIコーチの予定が読み込めませんでした</p>');
+  let h = trainSec(d.training, today);
+  h += foodSec(d.training, today);
+  h += weekPlanSec(d.training, today);
+  h += sec('🔗 体づくりのアプリ', null, '<div class="tags">' +
+    '<a href="https://zh1235789-png.github.io/workout-ai-coach/" target="_blank" rel="noopener">筋トレAIコーチ</a>' +
+    '<a href="https://zh1235789-png.github.io/workout-ai-coach/#stretch" target="_blank" rel="noopener">🧘 ストレッチ</a>' +
+    '<a href="https://zh1235789-png.github.io/healthtracker/" target="_blank" rel="noopener">HealthTracker（体重・食事）</a></div>');
   return h;
 }
 // ---------- 買い候補（下落銘柄を花子の基準で） ----------
@@ -604,8 +655,7 @@ function trainSec(training, today) {
   ul += trainLi('train:' + today + ':gym', '🏋️ <b>' + esc(slot.focus) + '</b>', gym);
   ul += '</ul>';
   const head = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span class="sub">ジム</span>' + seg + '</div>';
-  const links = '<div class="tags" style="margin-top:6px"><a href="https://zh1235789-png.github.io/workout-ai-coach/" target="_blank" rel="noopener">筋トレAIコーチ</a><a href="https://zh1235789-png.github.io/workout-ai-coach/#stretch" target="_blank" rel="noopener">🧘 ストレッチ</a></div>';
-  return sec('🏃 ラン・筋トレ', null, head + ul + tmr + links, 'train');
+  return sec('🏃 ラン・筋トレ', null, head + ul + tmr, 'train');
 }
 
 function oetSec(o, today) {
@@ -793,6 +843,7 @@ async function start() {
   ['week', 'dated', 'big', 'someday'].forEach(k => walk(DATA.hub[k]));
   ((DATA.oet && DATA.oet.menu) || []).forEach(m => live.add(m.id));
   engRoutine(todayISO()).forEach(r => live.add(r.id));
+  trainIds(DATA.training, todayISO()).forEach(id => live.add(id));
   ((DATA.gmail && DATA.gmail.items) || []).forEach(m => live.add('mail:' + m.url));
   Object.keys(S.checks).forEach(k => { if (!live.has(k)) delete S.checks[k]; });
   Object.keys(S.sent).forEach(k => { if (!live.has(k)) delete S.sent[k]; });

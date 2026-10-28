@@ -28,7 +28,7 @@ html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
   font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
-  padding: env(safe-area-inset-top) 0 calc(80px + env(safe-area-inset-bottom));
+  padding: env(safe-area-inset-top) 0 calc(130px + env(safe-area-inset-bottom));
 }
 main { max-width: 720px; margin: 0 auto; padding: 0 16px; }
 header { padding: 18px 0 8px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
@@ -90,7 +90,7 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .day.today { color: var(--accent); }
 .lead { font-size: 13px; color: var(--sub); margin: 0 0 6px; padding-left: 10px; border-left: 3px solid var(--line); }
 .empty { color: var(--sub); font-size: 13px; padding: 4px 0; }
-.mail .from, .routine .from { font-size: 12px; color: var(--sub); }
+.from { font-size: 12px; color: var(--sub); }
 .routine .rl { font-size: 13px; color: var(--sub); }
 .train .sub { font-size: 13px; color: var(--sub); }
 .yt .head { font-size: 14px; font-weight: 600; margin-top: 2px; }
@@ -104,15 +104,20 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .pill.acc { background: var(--acc-bg); color: var(--accent); font-weight: 600; }
 .wait { opacity: .6; }
 #bar {
-  position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  position: fixed; left: 0; right: 0; bottom: calc(56px + env(safe-area-inset-bottom)); padding: 10px 16px; z-index: 21;
   background: var(--card); border-top: 1px solid var(--line); display: none; gap: 10px; align-items: center; justify-content: center;
 }
 #bar.show { display: flex; }
 button {
   font: inherit; border: 0; border-radius: 10px; padding: 9px 14px; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button:not(.ghost):not(.icon-btn):not(.cd) { color: #10202e; } }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button:not(.ghost):not(.icon-btn):not(.cd):not(.tb) { color: #10202e; } }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .cd.today .dn { color: #10202e; } }
+.tabbar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line); display: flex; padding-bottom: env(safe-area-inset-bottom); z-index: 20; }
+.tabbar button.tb { flex: 1; background: none; border-radius: 0; padding: 8px 0 6px; color: var(--sub); font-size: 11px; font-weight: 400; display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative; }
+.tabbar button.tb .ic { font-size: 20px; line-height: 1.2; }
+.tabbar button.tb.sel { color: var(--accent); font-weight: 600; }
+.tabbar .badge { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 18px; padding: 0 5px; border-radius: 99px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; line-height: 18px; }
 header .right { display: flex; align-items: center; gap: 8px; }
 .icon-btn { background: var(--chip); color: var(--ink); font-weight: 400; padding: 6px 10px; font-size: 14px; white-space: nowrap; }
 .icon-btn:disabled { opacity: .6; }
@@ -151,9 +156,9 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!s || typeof s !== 'object') throw new Error('bad');
-    return { gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
+    return { tab: s.tab === 'invest' ? 'invest' : 'home', gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
   } catch (e) {
-    return { gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [] };
+    return { tab: 'home', gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [] };
   }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存できなくても表示は続ける */ } }
@@ -296,6 +301,9 @@ function render() {
   if (R.msg) h += '<p class="rstat' + (R.err ? ' err' : '') + '">' + esc(R.msg) + '</p>';
   if (R.showToken) h += tokenPanel();
 
+  if (S.tab === 'invest') {
+    h += investTab(d, today);
+  } else {
   h += '<div class="summary">' +
     (c.overdue.length ? '<span class="pill red">期限切れ ' + c.overdue.length + '</span>' : '') +
     '<span class="pill' + (c.today.length ? ' amber' : '') + '">今日 ' + c.today.length + '</span>' +
@@ -318,10 +326,6 @@ function render() {
   const runs = routineList(d, today);
   if (runs.length) h += routineSec(runs, today);
 
-  const yt = ytList(d, today);
-  if (yt.length) h += ytSec(yt, today);
-
-  if (d.stocks) h += stockSec(d.stocks, today);
 
   if (oet) h += oetSec(oet, today);
 
@@ -338,6 +342,8 @@ function render() {
   h += '<p class="meta" style="text-align:center;margin:18px 0">' + (S.gh
     ? 'チェックしたタスクは数秒後にMacへ送られ、1〜2分でObsidianのタスクハブに反映されます'
     : 'チェックした項目は下のボタンでリマインダー「Inbox」へ送ると、毎晩21:30にタスクハブへ反映されます（⚙でトークンを設定すると自動で反映）') + '</p>';
+  }
+  h += tabNav(S.tab, d, today);
   app.innerHTML = h;
   updateBar();
 }
@@ -431,6 +437,21 @@ function ytSec(list, today) {
   let h = fresh.length ? '<ul>' + fresh.map(v => ytItem(v, today)).join('') + '</ul>' : '<p class="empty">昨日・今日の新着はありません</p>';
   if (older.length) h += '<details><summary class="day">それより前（' + older.length + '本）▸</summary><ul>' + older.map(v => ytItem(v, today)).join('') + '</ul></details>';
   return sec('📺 花子の米国株（新着）', fresh.length, h);
+}
+// ---------- タブ（ホーム／投資） ----------
+// 投資タブ: 下落アラートと花子の米国株（YouTube要約）（純粋関数）
+function investTab(d, today) {
+  let h = d.stocks ? stockSec(d.stocks, today) : sec('📉 下落アラート', null, '<p class="empty">まだ株価のデータがありません（毎朝6:30過ぎに取得）</p>');
+  const yt = ytList(d, today);
+  h += yt.length ? ytSec(yt, today) : sec('📺 花子の米国株', null, '<p class="empty">直近7日の動画はありません</p>');
+  return h;
+}
+// 画面下のタブ。投資タブには新しく基準を超えた銘柄の数を出す（純粋関数）
+function tabNav(tab, d, today) {
+  const fresh = d && d.stocks ? stockGroups(d.stocks, today).fresh.length : 0;
+  const btn = (key, ic, label, badge) => '<button type="button" class="tb' + (tab === key ? ' sel' : '') + '" data-act="tab" data-tab="' + key + '" aria-pressed="' + (tab === key) + '">' +
+    '<span class="ic">' + ic + '</span>' + label + (badge ? '<span class="badge">' + badge + '</span>' : '') + '</button>';
+  return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('invest', '📈', '投資', fresh) + '</nav>';
 }
 // ---------- 株価の下落アラート ----------
 // 52週高値からの下落率が基準を超えた銘柄。昨日以降に基準を超えたものを「新規」として上に出す（純粋関数）
@@ -646,6 +667,7 @@ async function onAppClick(ev) {
     render();
     requestRefresh();
   } else if (act === 'calday') { R.calSel = b.dataset.date; render(); }
+  else if (act === 'tab') { S.tab = b.dataset.tab === 'invest' ? 'invest' : 'home'; save(); render(); window.scrollTo(0, 0); }
   else if (act === 'gym') { S.gym = b.dataset.gym === '2' ? '2' : '1'; save(); render(); }
   else if (act === 'settings') { R.showToken = !R.showToken; render(); }
   else if (act === 'closeToken') { R.showToken = false; render(); }

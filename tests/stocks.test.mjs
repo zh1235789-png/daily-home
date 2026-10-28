@@ -40,3 +40,26 @@ test('新規が多い日は8件まで出して残りは折りたたみへ', () =
   assert.match(h, /ほか 3 件は下のグループ別一覧に/);
   assert.equal((h.split('<details>')[0].match(/class="ev sk/g) || []).length, 8);
 });
+
+test('投資タブ: 下落アラートと花子の動画を載せ、データが無ければ空表示', () => {
+  const h = app.investTab({ stocks, youtube: { items: [{ id: 'a', date: '2026-10-28', title: '動画A', url: 'u' }] } }, '2026-10-28');
+  assert.ok(h.indexOf('📉 下落アラート') < h.indexOf('📺 花子の米国株'));
+  assert.match(h, /動画A/);
+  const e = app.investTab({}, '2026-10-28');
+  assert.match(e, /まだ株価のデータがありません/);
+  assert.match(e, /直近7日の動画はありません/);
+});
+
+test('タブバー: 選択中に印、投資タブに新規の件数', () => {
+  const h = app.tabNav('invest', { stocks }, '2026-10-28');
+  assert.match(h, /class="tb sel" data-act="tab" data-tab="invest"/);
+  assert.match(h, /<span class="badge">2<\/span>/);
+  assert.ok(!app.tabNav('home', {}, '2026-10-28').includes('badge'));
+});
+
+test('保存したタブを読み戻す・不正な値はホーム', () => {
+  const a = loadApp({ today: '2026-10-28T09:00:00+09:00', storage: { 'dh.v1': JSON.stringify({ tab: 'invest' }) } });
+  assert.equal(a.loadState().tab, 'invest');
+  const b = loadApp({ today: '2026-10-28T09:00:00+09:00', storage: { 'dh.v1': JSON.stringify({ tab: 'x' }) } });
+  assert.equal(b.loadState().tab, 'home');
+});

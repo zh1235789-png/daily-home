@@ -16,6 +16,8 @@ class Universe(unittest.TestCase):
     def test_groups(self):
         self.assertEqual(UNI["VOO"][0], "index")
         self.assertEqual(UNI["META"][0], "strong")        # GAFAM はリストに無くても強い会社
+        self.assertEqual(UNI["NVDA"], ("strong", []))     # NVIDIA も強い会社
+        self.assertEqual(UNI["SOXL"], ("lev", []))        # 3倍レバレッジは別区分
         self.assertEqual(UNI["COST"][0], "strong")        # 殿堂入りのうち大型で安定
         self.assertEqual(UNI["KRUS"][0], "other")         # 殿堂入りでも小型・不安定なものは30%基準
         self.assertEqual(UNI["GOOGL"], ("strong", [2022, 2025]))  # GOOG は GOOGL にまとめる
@@ -44,6 +46,14 @@ class Evaluate(unittest.TestCase):
         self.assertEqual(st3["GOOGL"]["notified"], 30.0)
         _, notify, _ = evaluate({"GOOGL": q(-39.9)}, UNI, st3, "2026-10-30")
         self.assertEqual(notify, [])
+
+    def test_leveraged(self):
+        alerts, notify, _ = evaluate({"SOXL": q(-29.9), "NVDA": q(-20.0)}, UNI, {}, "2026-10-28")
+        self.assertEqual(notify, ["NVDA"])                # SOXL は30%から
+        alerts, notify, _ = evaluate({"SOXL": q(-66.4)}, UNI, {}, "2026-10-28")
+        self.assertEqual((notify, alerts[0]["name"], alerts[0]["label"]), (["SOXL"], "半導体3倍（SOXL）", "レバレッジ"))
+        _, notify, _ = evaluate({"SOXL": q(-69.9)}, UNI, {"SOXL": {"since": "x", "notified": 66.4}}, "2026-10-29")
+        self.assertEqual(notify, [])                      # 次は70%
 
     def test_other_fixed_levels(self):
         st = {"OKLO": {"since": "2026-10-20", "notified": 33.9}}

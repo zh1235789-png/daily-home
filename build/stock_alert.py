@@ -7,7 +7,8 @@
   指数連動（VOO・QQQ・VT）           … 10% 以上
   強い会社（GAFAM＋殿堂入りのうち大型で安定した会社） … 20% 以上
   その他の歴代Hanako30                 … 30% 以上
-その後は固定の段階で知らせ直す（指数 15・20%…／強い会社 30・40%…／Hanako30 40・50%…）。
+  3倍レバレッジ（SOXL）                … 30% 以上（NVDA は強い会社）
+その後は固定の段階で知らせ直す（指数 15・20%…／レバレッジ・Hanako30 40・50%…／強い会社 30・40%…）。
 ダメ株トップ10と、花子が避けるべきとした銘柄は対象外。
 銘柄リストは ~/bin/hanako30_drawdown.py の LISTS / DAME_SET / AVOID を使う（新しい年はそちらに足す）。
 
@@ -31,7 +32,11 @@ LISTS_PY = Path.home() / "bin/hanako30_drawdown.py"
 REMINDER_LIST = "株価アラート"
 
 INDEX = {"VOO": "S&P500（VOO）", "QQQ": "ナスダック100（QQQ）", "VT": "全世界株（VT）"}
+LEVERAGED = {"SOXL": "半導体3倍（SOXL）"}
+NAMES = {**INDEX, **LEVERAGED}
 GAFAM = ["GOOGL", "AAPL", "META", "AMZN", "MSFT"]
+# Hanako30 に無くても強い会社として見るもの（2026-10-28 ユーザー指示）
+EXTRA_STRONG = ["NVDA"]
 # 殿堂入り（Hanako30 2022年版）のうち、大型で業績の安定した会社だけ（2026-10-28 ユーザー指示）。
 # 外したもの（その他のHanako30として30%基準で見る）: TSLA（値動きが大きい）・KEYS・CMG・INFY（中型）・
 # KRUS（小型）・COIN（暗号資産連動）・INTC・PYPL・TGT（業績が不振）
@@ -39,19 +44,21 @@ STRONG = ["ORCL", "TXN", "INTU", "HD", "COST", "ADBE", "GS", "ASML", "TSM", "AMA
           "BAC", "RTX", "NFLX", "LRCX", "QCOM", "XOM"]
 GROUPS = {  # key: (表示名, 基準%)
     "index": ("指数連動", 10.0),
+    # 3倍レバレッジは値動きも3倍なので、指数10%相当の30%から（2026-10-28）
+    "lev": ("レバレッジ", 30.0),
     "strong": ("強い会社", 20.0),
     "other": ("Hanako30", 30.0),
 }
 REARM = 3.0     # 基準より3ポイント戻したら解除（基準付近の上下で何度も通知しない）
 # 基準から何%刻みで知らせ直すか（2026-10-28 ユーザー指示: 固定の段階）
-#   指数 10→15→20%、強い会社 20→30→40%、Hanako30 30→40→50%
-STEP = {"index": 5.0, "strong": 10.0, "other": 10.0}
+#   指数 10→15→20%、レバレッジ 30→40→50%、強い会社 20→30→40%、Hanako30 30→40→50%
+STEP = {"index": 5.0, "lev": 10.0, "strong": 10.0, "other": 10.0}
+ALIASES = {"GOOG": "GOOGL"}  # 同じ会社の別クラスは1つにまとめる
 
 
 def tier(drop, th, step):
     """下落率がどの段階にいるか（基準ちょうど=0、基準+step=1 …）"""
     return int((drop - th) / step + 1e-9) if drop >= th else -1
-ALIASES = {"GOOG": "GOOGL"}  # 同じ会社の別クラスは1つにまとめる
 
 
 def load_lists(path=LISTS_PY):
@@ -68,8 +75,9 @@ def universe(lists, dame, avoid):
         for t in s.split():
             years.setdefault(ALIASES.get(t, t), []).append(y)
     out = {t: ("index", []) for t in INDEX}
+    out.update({t: ("lev", []) for t in LEVERAGED})
     hof = set(STRONG)
-    for t in GAFAM:
+    for t in GAFAM + EXTRA_STRONG:
         if t not in dame and t not in avoid:
             out[t] = ("strong", sorted(years.get(t, [])))
     for t, ys in years.items():
@@ -114,7 +122,7 @@ def evaluate(quotes, uni, state, today, failed=()):
             notify.append(t)
             st["notified"] = drop
         new_state[t] = st
-        alerts.append({"ticker": t, "name": INDEX.get(t, t), "group": group, "label": label,
+        alerts.append({"ticker": t, "name": NAMES.get(t, t), "group": group, "label": label,
                        "threshold": th, "years": years, "since": st["since"],
                        "new": t in notify, "below": drop >= th, **q})
     for t in failed:

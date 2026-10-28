@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 python3 build/build.py
+# YouTube 要約の投資メモを花子投資スキルのノートへ追記（失敗しても公開は続ける）
+python3 build/hanako_log.py || echo "花子の発言ログの追記に失敗（次回の公開で再試行）"
 git add data.enc.json
 if git diff --cached --quiet; then
   # 前回 commit 後の push が失敗していたら、データだけのコミットに限って押し直す

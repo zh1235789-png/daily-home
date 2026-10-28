@@ -429,11 +429,11 @@ function trainSec(training, today) {
     if (m.optional && m.optional.length) gym += '<div class="sub" style="margin-top:4px">余裕があれば</div><ol class="opt">' + m.optional.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
   }
   if (slot.note) gym += '<div class="tags"><span>※ ' + esc(slot.note) + '</span></div>';
-  if (slot.leg !== null && slot.leg !== undefined) gym += '<div class="tags"><span>※ ハムに痛み（1以上）がある日は脚を外す</span></div>';
+  if (slot.leg !== null && slot.leg !== undefined) gym += '<div class="tags"><span>※ ハムに痛みがある日は脚を外す</span></div>';
   ul += trainLi('train:' + today + ':gym', '🏋️ <b>' + esc(slot.focus) + '</b>', gym);
   ul += '</ul>';
   const head = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span class="sub">ジム</span>' + seg + '</div>';
-  const links = '<div class="tags" style="margin-top:6px"><a href="https://zh1235789-png.github.io/workout-ai-coach/" target="_blank" rel="noopener">筋トレAIコーチ</a><a href="https://zh1235789-png.github.io/hamstring-rehab-tracker/app/" target="_blank" rel="noopener">ハムリハ</a></div>';
+  const links = '<div class="tags" style="margin-top:6px"><a href="https://zh1235789-png.github.io/workout-ai-coach/" target="_blank" rel="noopener">筋トレAIコーチ</a><a href="https://zh1235789-png.github.io/workout-ai-coach/#stretch" target="_blank" rel="noopener">🧘 ストレッチ</a></div>';
   return sec('🏃 ラン・筋トレ', null, head + ul + tmr + links, 'train');
 }
 

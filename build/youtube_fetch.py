@@ -49,7 +49,9 @@ def load_json(path, default):
 
 
 def summarized_ids():
-    return {it.get("id") for it in load_json(SUMMARY, {}).get("items", [])}
+    data = load_json(SUMMARY, {})
+    items = data.get("items") if isinstance(data, dict) else None
+    return {it.get("id") for it in items if isinstance(it, dict)} if isinstance(items, list) else set()
 
 
 def pending():

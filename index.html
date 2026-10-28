@@ -411,7 +411,7 @@ function ytItem(v, today) {
   const when = v.date === today ? '今日' : v.date === addDays(today, -1) ? '昨日' : md(v.date);
   const meta = [when, v.kind === 'live' ? 'ライブ' : '動画'].concat(v.minutes ? [v.minutes + '分'] : []).join(' · ');
   return '<li class="task yt"><div class="body"><div class="from">' + esc(meta) + '</div>' +
-    '<div class="txt"><a href="' + esc(v.url) + '" target="_blank" rel="noopener">' + esc(v.title) + '</a></div>' +
+    '<div class="txt">' + (/^https:\/\/(www\.)?youtube\.com\//.test(v.url || '') ? '<a href="' + esc(v.url) + '" target="_blank" rel="noopener">' + esc(v.title) + '</a>' : esc(v.title)) + '</div>' +
     (v.headline ? '<div class="head">' + esc(v.headline) + '</div>' : '') +
     ((v.points || []).length ? '<ul class="pts">' + v.points.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' : '') +
     (v.hanako ? '<div class="hn">🙋‍♀️ ' + esc(v.hanako) + '</div>' : '') +

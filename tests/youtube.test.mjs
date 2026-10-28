@@ -30,3 +30,9 @@ test('新着が無い日は空表示', () => {
   const h = app.ytSec(norm(app.ytList(data, '2026-10-28')).slice(1), '2026-10-28');
   assert.match(h, /昨日・今日の新着はありません/);
 });
+
+test('YouTube以外のURLはリンクにしない', () => {
+  const h = app.ytItem({ id: 'x', date: '2026-10-28', title: 'T', url: 'javascript:alert(1)' }, '2026-10-28');
+  assert.ok(!h.includes('href'));
+  assert.match(app.ytItem({ id: 'y', date: '2026-10-28', title: 'T', url: 'https://www.youtube.com/watch?v=y' }, '2026-10-28'), /href=/);
+});

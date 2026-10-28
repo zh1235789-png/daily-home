@@ -139,8 +139,10 @@ $yt_out
 ）"
 before="$(stat -f %m "$CONF/gmail.json" "$CONF/calendar.json" 2>/dev/null | tr '\n' ' ')"
 # shellcheck disable=SC2086
-claude -p "$prompt" --model sonnet --add-dir "$CONF" \
-  --allowedTools Read "Edit(~/.config/daily-home/calendar.json)" "Edit(~/.config/daily-home/gmail.json)" "Edit(~/.config/daily-home/youtube.json)" $tools \
+# 買い候補（手順3b）は Obsidian の投資ノートを読み、WebSearch でニュースを確かめて picks.json に書く
+FIN="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian Vault/03_Personal/03.6_Finance"
+claude -p "$prompt" --model sonnet --add-dir "$CONF" --add-dir "$FIN" \
+  --allowedTools Read WebSearch "Edit(~/.config/daily-home/calendar.json)" "Edit(~/.config/daily-home/gmail.json)" "Edit(~/.config/daily-home/youtube.json)" "Edit(~/.config/daily-home/picks.json)" $tools \
   >>"$LOG" 2>&1
 after="$(stat -f %m "$CONF/gmail.json" "$CONF/calendar.json" 2>/dev/null | tr '\n' ' ')"
 if [ "$before" != "$after" ]; then

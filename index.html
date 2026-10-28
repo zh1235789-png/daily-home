@@ -81,6 +81,15 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .sk .sb .meta { display: block; text-align: left; }
 .sk .dd { color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums; }
 .sk.new .t::after { content: " 🆕"; font-size: 11px; }
+.pk { padding: 7px 0; border-top: 1px solid var(--line); }
+.pk:first-of-type { border-top: 0; }
+.pk .ph { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.pk .ph b { font-size: 15px; }
+.pk .rs, .pk .rk { font-size: 13px; overflow-wrap: anywhere; }
+.pk .rk { color: var(--sub); }
+.pk-lv { font-size: 12px; font-weight: 700; margin: 10px 0 2px; }
+.pk-lv.buy { color: var(--green); } .pk-lv.watch { color: var(--amber); } .pk-lv.avoid { color: var(--red); }
+.disc { font-size: 11px; color: var(--sub); margin-top: 8px; }
 .chip { font-size: 10px; line-height: 1.3; padding: 1px 3px; border-radius: 4px; background: var(--chip); overflow: hidden; word-break: break-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .chip.timed { background: var(--acc-bg); }
 .chip.task { background: var(--red-bg); color: var(--red); font-weight: 600; }
@@ -441,7 +450,8 @@ function ytSec(list, today) {
 // ---------- タブ（ホーム／投資） ----------
 // 投資タブ: 下落アラートと花子の米国株（YouTube要約）（純粋関数）
 function investTab(d, today) {
-  let h = d.stocks ? stockSec(d.stocks, today) : sec('📉 下落アラート', null, '<p class="empty">まだ株価のデータがありません（毎朝6:30過ぎに取得）</p>');
+  let h = d.picks ? picksSec(d.picks, today) : '';
+  h += d.stocks ? stockSec(d.stocks, today) : sec('📉 下落アラート', null, '<p class="empty">まだ株価のデータがありません（毎朝6:30過ぎに取得）</p>');
   const yt = ytList(d, today);
   h += yt.length ? ytSec(yt, today) : sec('📺 花子の米国株', null, '<p class="empty">直近7日の動画はありません</p>');
   return h;
@@ -452,6 +462,34 @@ function tabNav(tab, d, today) {
   const btn = (key, ic, label, badge) => '<button type="button" class="tb' + (tab === key ? ' sel' : '') + '" data-act="tab" data-tab="' + key + '" aria-pressed="' + (tab === key) + '">' +
     '<span class="ic">' + ic + '</span>' + label + (badge ? '<span class="badge">' + badge + '</span>' : '') + '</button>';
   return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('invest', '📈', '投資', fresh) + '</nav>';
+}
+// ---------- 買い候補（下落銘柄を花子の基準で） ----------
+const PICK_LV = [['buy', '🟢 候補'], ['watch', '🟡 様子見'], ['avoid', '🔴 見送り']];
+function pickItem(p) {
+  return '<div class="pk"><div class="ph"><b>' + esc(p.ticker) + '</b>' +
+    (typeof p.dd === 'number' ? '<span class="dd" style="color:var(--red);font-weight:600">' + p.dd.toFixed(1) + '%</span>' : '') +
+    (p.name ? '<span class="meta">' + esc(p.name) + '</span>' : '') +
+    (p.when ? '<span class="due amber">' + esc(p.when) + '</span>' : '') + '</div>' +
+    (p.reason ? '<div class="rs">' + esc(p.reason) + '</div>' : '') +
+    (p.risk ? '<div class="rk">⚠️ ' + esc(p.risk) + '</div>' : '') + '</div>';
+}
+function picksSec(pk, today) {
+  const list = pk.picks || [];
+  const buy = list.filter(p => p.level === 'buy');
+  let h = '<div class="from">' + (pk.asof ? esc(md(pk.asof)) + ' 終値で判断' : '') + (pk.updated ? ' · ' + esc(String(pk.updated).slice(5, 16).replace('T', ' ')) + ' 作成' : '') + '</div>';
+  if (pk.note) h += '<div class="rs" style="margin:4px 0">' + esc(pk.note) + '</div>';
+  if (!list.length) h += '<p class="empty">いま挙げる候補はありません</p>';
+  PICK_LV.forEach(([lv, label]) => {
+    const xs = list.filter(p => p.level === lv);
+    if (!xs.length) return;
+    const body = '<div class="pk-lv ' + lv + '">' + label + '（' + xs.length + '）</div>' + xs.map(pickItem).join('');
+    h += lv === 'buy' ? body : '<details><summary class="day">' + label + ' ' + xs.length + '件 ▸</summary>' + xs.map(pickItem).join('') + '</details>';
+  });
+  const src = (pk.sources || []).filter(x => /^https:\/\//.test(x.url || ''));
+  if (src.length) h += '<details><summary class="day">出典 ' + src.length + '件 ▸</summary><ul class="pts">' +
+    src.map(x => '<li><a href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.title || x.url) + '</a></li>').join('') + '</ul></details>';
+  h += '<div class="disc">花子チャンネルの投資哲学を軸にした情報整理で、投資推奨ではありません。最終判断はご自身で。</div>';
+  return sec('💡 買い候補（花子の基準）', buy.length, h);
 }
 // ---------- 株価の下落アラート ----------
 // 52週高値からの下落率が基準を超えた銘柄。昨日以降に基準を超えたものを「新規」として上に出す（純粋関数）

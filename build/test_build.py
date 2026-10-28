@@ -4,7 +4,7 @@ import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import tempfile
-from build import load_stocks, load_youtube, parse_due, parse_hub, parse_routines
+from build import load_picks, load_stocks, load_youtube, parse_due, parse_hub, parse_routines
 
 T = dt.date(2026, 10, 20)
 
@@ -98,6 +98,16 @@ class Stocks(unittest.TestCase):
             s = load_stocks(p)
             self.assertEqual([a["ticker"] for a in s["alerts"]], ["GOOGL"])
             self.assertEqual(s["asof"], "2026-10-28")
+
+    def test_picks(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "picks.json"
+            self.assertIsNone(load_picks(p))
+            p.write_text('{"asof": "2026-10-28", "picks": [{"ticker": "AMAT", "level": "buy"}, {"ticker": "X", "level": "maybe"}],'
+                         ' "sources": [{"title": "a", "url": "https://a"}, {"title": "b", "url": "javascript:x"}]}')
+            r = load_picks(p)
+            self.assertEqual([x["ticker"] for x in r["picks"]], ["AMAT"])
+            self.assertEqual([x["title"] for x in r["sources"]], ["a"])
 
 
 if __name__ == "__main__":

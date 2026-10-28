@@ -63,3 +63,29 @@ test('保存したタブを読み戻す・不正な値はホーム', () => {
   const b = loadApp({ today: '2026-10-28T09:00:00+09:00', storage: { 'dh.v1': JSON.stringify({ tab: 'x' }) } });
   assert.equal(b.loadState().tab, 'home');
 });
+
+const picks = { asof: '2026-10-28', updated: '2026-10-28T11:50+09:00', note: '現金が目標未達なので小口で', picks: [
+  { ticker: 'AMAT', level: 'buy', dd: -45.2, reason: '受注は強い<b>', risk: '半導体に偏る', when: '11/12決算後' },
+  { ticker: 'NFLX', level: 'watch', dd: -46, reason: '成長鈍化' },
+  { ticker: 'ORCL', level: 'avoid', reason: '借金' },
+], sources: [{ title: 'S1', url: 'https://example.com/a' }, { title: 'bad', url: 'javascript:alert(1)' }] };
+
+test('買い候補: 候補は開いて、様子見・見送りは折りたたみ・エスケープ・https以外の出典は出さない', () => {
+  const h = app.picksSec(picks, '2026-10-28');
+  assert.match(h, /💡 買い候補（花子の基準） <span class="n">1<\/span>/);
+  assert.match(h, /🟢 候補（1）/);
+  assert.match(h, /<summary class="day">🟡 様子見 1件/);
+  assert.match(h, /<summary class="day">🔴 見送り 1件/);
+  assert.match(h, /11\/12決算後/);
+  assert.match(h, /⚠️ 半導体に偏る/);
+  assert.match(h, /出典 1件/);
+  assert.ok(!h.includes('javascript:'));
+  assert.ok(!h.includes('強い<b>'));
+  assert.match(h, /投資推奨ではありません/);
+});
+
+test('買い候補が空でも出せる・投資タブの先頭に置く', () => {
+  assert.match(app.picksSec({ picks: [] }, '2026-10-28'), /いま挙げる候補はありません/);
+  const h = app.investTab({ picks, stocks }, '2026-10-28');
+  assert.ok(h.indexOf('💡 買い候補') < h.indexOf('📉 下落アラート'));
+});

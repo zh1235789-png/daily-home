@@ -42,7 +42,8 @@ GROUPS = {  # key: (表示名, 基準%)
     "other": ("Hanako30", 30.0),
 }
 REARM = 3.0     # 基準より3ポイント戻したら解除（基準付近の上下で何度も通知しない）
-DEEPER = 10.0   # 通知後さらに10ポイント下げたら、もう一度知らせる
+# 通知後さらにこれだけ下げたら、もう一度知らせる（2026-10-28 ユーザー指示: 指数は5ポイント、ほかは10ポイント）
+DEEPER = {"index": 5.0, "strong": 10.0, "other": 10.0}
 ALIASES = {"GOOG": "GOOGL"}  # 同じ会社の別クラスは1つにまとめる
 
 
@@ -101,7 +102,7 @@ def evaluate(quotes, uni, state, today, failed=()):
         if not active:
             continue
         st = dict(prev) if prev else {"since": today, "notified": None}
-        if st["notified"] is None or drop >= st["notified"] + DEEPER:
+        if st["notified"] is None or drop >= st["notified"] + DEEPER[group]:
             notify.append(t)
             st["notified"] = drop
         new_state[t] = st

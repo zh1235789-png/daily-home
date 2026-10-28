@@ -43,6 +43,14 @@ class Evaluate(unittest.TestCase):
         self.assertEqual(notify, ["GOOGL"])               # さらに10ポイント下げたら再通知
         self.assertEqual(st3["GOOGL"]["notified"], 31.5)
 
+    def test_index_renotify_at_5(self):
+        st = {"VOO": {"since": "2026-10-20", "notified": 10.5}}
+        _, notify, _ = evaluate({"VOO": q(-15.0)}, UNI, st, "2026-10-28")
+        self.assertEqual(notify, [])                      # 指数は4.5ポイントでは再通知しない
+        _, notify, st2 = evaluate({"VOO": q(-15.5)}, UNI, st, "2026-10-28")
+        self.assertEqual(notify, ["VOO"])                 # さらに5ポイントで再通知
+        self.assertEqual(st2["VOO"]["notified"], 15.5)
+
     def test_rearm(self):
         st = {"GOOGL": {"since": "2026-10-20", "notified": 21.0}}
         alerts, _, st2 = evaluate({"GOOGL": q(-18)}, UNI, st, "2026-10-28")

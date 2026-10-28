@@ -323,6 +323,16 @@ def load_stocks(path):
     return {k: data.get(k) for k in ("updated", "asof", "watching", "failed", "rules")} | {"alerts": alerts}
 
 
+def load_picks(path):
+    """Claude が下落銘柄から選んだ買い候補 picks.json。壊れていれば None。"""
+    data = load_json(path, None)
+    if not isinstance(data, dict) or not isinstance(data.get("picks"), list):
+        return None
+    picks = [p for p in data["picks"] if isinstance(p, dict) and p.get("ticker") and p.get("level") in ("buy", "watch", "avoid")]
+    sources = [x for x in data.get("sources") or [] if isinstance(x, dict) and str(x.get("url", "")).startswith("https://")]
+    return {"updated": data.get("updated"), "asof": data.get("asof"), "note": data.get("note"), "picks": picks, "sources": sources}
+
+
 # ---------- 組み立て・暗号化 ----------
 
 def load_json(path, default):
@@ -346,6 +356,7 @@ def build(today=None):
         "training": load_training(),
         "youtube": load_youtube(CONF / "youtube.json"),
         "stocks": load_stocks(CONF / "stocks.json"),
+        "picks": load_picks(CONF / "picks.json"),
     }
     return data
 

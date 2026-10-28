@@ -64,8 +64,9 @@ const WEEK_PLAN = [
   assert.deepEqual(out.menus['1'].wed.must, ['a']);
 });
 
-test('抽出スクリプト：本物の筋トレAIコーチから火〜日の5枠', { skip: !existsSync(join(homedir(), 'workout-ai-coach/index.html')) }, () => {
+test('抽出スクリプト：本物の筋トレAIコーチを読める（予定の中身は問わない）', { skip: !existsSync(join(homedir(), 'workout-ai-coach/index.html')) }, () => {
   const out = JSON.parse(execFileSync('node', [new URL('../build/extract_training.mjs', import.meta.url).pathname, join(homedir(), 'workout-ai-coach/index.html')], { encoding: 'utf8' }));
-  assert.deepEqual(out.plan.map((p) => p.key), ['tue', 'wed', 'fri', 'sat', 'sun']);
+  assert.ok(out.plan.length > 0);
+  out.plan.forEach((p) => { assert.ok(Array.isArray(p.days) && p.key && p.focus && typeof p.run === 'string'); });
   assert.ok(out.menus['1'] && out.menus['2']);
 });

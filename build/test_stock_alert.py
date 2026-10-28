@@ -36,20 +36,31 @@ class Evaluate(unittest.TestCase):
 
     def test_no_repeat_until_deeper_or_reset(self):
         st = {"GOOGL": {"since": "2026-10-20", "notified": 21.0}}
-        _, notify, st2 = evaluate({"GOOGL": q(-25)}, UNI, st, "2026-10-28")
-        self.assertEqual(notify, [])                      # 4ポイント深いだけでは再通知しない
+        _, notify, st2 = evaluate({"GOOGL": q(-29.9)}, UNI, st, "2026-10-28")
+        self.assertEqual(notify, [])                      # 30%の段階に届くまでは再通知しない
         self.assertEqual(st2["GOOGL"]["since"], "2026-10-20")
-        _, notify, st3 = evaluate({"GOOGL": q(-31.5)}, UNI, st2, "2026-10-29")
-        self.assertEqual(notify, ["GOOGL"])               # さらに10ポイント下げたら再通知
-        self.assertEqual(st3["GOOGL"]["notified"], 31.5)
+        _, notify, st3 = evaluate({"GOOGL": q(-30.0)}, UNI, st2, "2026-10-29")
+        self.assertEqual(notify, ["GOOGL"])               # 強い会社は 20→30→40%
+        self.assertEqual(st3["GOOGL"]["notified"], 30.0)
+        _, notify, _ = evaluate({"GOOGL": q(-39.9)}, UNI, st3, "2026-10-30")
+        self.assertEqual(notify, [])
+
+    def test_other_fixed_levels(self):
+        st = {"OKLO": {"since": "2026-10-20", "notified": 33.9}}
+        _, notify, _ = evaluate({"OKLO": q(-39.9)}, UNI, st, "2026-10-28")
+        self.assertEqual(notify, [])                      # 33.9%で通知済みでも、次は43.9%でなく40%
+        _, notify, _ = evaluate({"OKLO": q(-40.0)}, UNI, st, "2026-10-28")
+        self.assertEqual(notify, ["OKLO"])
+        _, notify, _ = evaluate({"OKLO": q(-52.0)}, UNI, {"OKLO": {"since": "x", "notified": 41.0}}, "2026-10-28")
+        self.assertEqual(notify, ["OKLO"])                # 50%の段階
 
     def test_index_renotify_at_5(self):
-        st = {"VOO": {"since": "2026-10-20", "notified": 10.5}}
-        _, notify, _ = evaluate({"VOO": q(-15.0)}, UNI, st, "2026-10-28")
-        self.assertEqual(notify, [])                      # 指数は4.5ポイントでは再通知しない
-        _, notify, st2 = evaluate({"VOO": q(-15.5)}, UNI, st, "2026-10-28")
-        self.assertEqual(notify, ["VOO"])                 # さらに5ポイントで再通知
-        self.assertEqual(st2["VOO"]["notified"], 15.5)
+        st = {"VOO": {"since": "2026-10-20", "notified": 12.0}}
+        _, notify, _ = evaluate({"VOO": q(-14.9)}, UNI, st, "2026-10-28")
+        self.assertEqual(notify, [])
+        _, notify, st2 = evaluate({"VOO": q(-15.0)}, UNI, st, "2026-10-28")
+        self.assertEqual(notify, ["VOO"])                 # 指数は 10→15→20%
+        self.assertEqual(st2["VOO"]["notified"], 15.0)
 
     def test_rearm(self):
         st = {"GOOGL": {"since": "2026-10-20", "notified": 21.0}}

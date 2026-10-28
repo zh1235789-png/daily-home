@@ -7,6 +7,7 @@
   指数連動（VOO・QQQ・VT）           … 10% 以上
   強い会社（GAFAM＋殿堂入りのうち大型で安定した会社） … 20% 以上
   その他の歴代Hanako30                 … 30% 以上
+その後は固定の段階で知らせ直す（指数 15・20%…／強い会社 30・40%…／Hanako30 40・50%…）。
 ダメ株トップ10と、花子が避けるべきとした銘柄は対象外。
 銘柄リストは ~/bin/hanako30_drawdown.py の LISTS / DAME_SET / AVOID を使う（新しい年はそちらに足す）。
 
@@ -42,8 +43,14 @@ GROUPS = {  # key: (表示名, 基準%)
     "other": ("Hanako30", 30.0),
 }
 REARM = 3.0     # 基準より3ポイント戻したら解除（基準付近の上下で何度も通知しない）
-# 通知後さらにこれだけ下げたら、もう一度知らせる（2026-10-28 ユーザー指示: 指数は5ポイント、ほかは10ポイント）
-DEEPER = {"index": 5.0, "strong": 10.0, "other": 10.0}
+# 基準から何%刻みで知らせ直すか（2026-10-28 ユーザー指示: 固定の段階）
+#   指数 10→15→20%、強い会社 20→30→40%、Hanako30 30→40→50%
+STEP = {"index": 5.0, "strong": 10.0, "other": 10.0}
+
+
+def tier(drop, th, step):
+    """下落率がどの段階にいるか（基準ちょうど=0、基準+step=1 …）"""
+    return int((drop - th) / step + 1e-9) if drop >= th else -1
 ALIASES = {"GOOG": "GOOGL"}  # 同じ会社の別クラスは1つにまとめる
 
 
@@ -102,7 +109,8 @@ def evaluate(quotes, uni, state, today, failed=()):
         if not active:
             continue
         st = dict(prev) if prev else {"since": today, "notified": None}
-        if st["notified"] is None or drop >= st["notified"] + DEEPER[group]:
+        # 前回通知した段階より深い段階に入ったら知らせる
+        if st["notified"] is None or tier(drop, th, STEP[group]) > tier(st["notified"], th, STEP[group]):
             notify.append(t)
             st["notified"] = drop
         new_state[t] = st

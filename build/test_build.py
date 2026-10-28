@@ -4,7 +4,7 @@ import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import tempfile
-from build import load_youtube, parse_due, parse_hub, parse_routines
+from build import load_stocks, load_youtube, parse_due, parse_hub, parse_routines
 
 T = dt.date(2026, 10, 20)
 
@@ -85,6 +85,19 @@ class Youtube(unittest.TestCase):
                          '{"id":"b","title":"B","date":"2026-10-27"},{"title":"IDなし"}]}')
             y = load_youtube(p, keep=5)
             self.assertEqual([i["id"] for i in y["items"]], ["b", "a"])
+
+
+class Stocks(unittest.TestCase):
+    def test_load(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "stocks.json"
+            self.assertIsNone(load_stocks(p))
+            p.write_text("{壊れ")
+            self.assertIsNone(load_stocks(p))
+            p.write_text('{"asof": "2026-10-28", "alerts": [{"ticker": "GOOGL", "dd": -20.4}, {"ticker": "X"}, 3]}')
+            s = load_stocks(p)
+            self.assertEqual([a["ticker"] for a in s["alerts"]], ["GOOGL"])
+            self.assertEqual(s["asof"], "2026-10-28")
 
 
 if __name__ == "__main__":

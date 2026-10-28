@@ -76,6 +76,9 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .cd.today .dn { color: #fff; background: var(--accent); border-radius: 99px; width: 26px; margin: 0 auto; }
 .cd.sun .dh, .cd.sun:not(.today) .dn { color: var(--red); }
 .cd.sat .dh, .cd.sat:not(.today) .dn { color: var(--sat); }
+.sk .t { width: 66px; font-weight: 600; color: var(--ink); }
+.sk .dd { color: var(--red); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sk.new .t::after { content: " 🆕"; font-size: 11px; }
 .chip { font-size: 10px; line-height: 1.3; padding: 1px 3px; border-radius: 4px; background: var(--chip); overflow: hidden; word-break: break-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
 .chip.timed { background: var(--acc-bg); }
 .chip.task { background: var(--red-bg); color: var(--red); font-weight: 600; }
@@ -316,6 +319,8 @@ function render() {
   const yt = ytList(d, today);
   if (yt.length) h += ytSec(yt, today);
 
+  if (d.stocks) h += stockSec(d.stocks, today);
+
   if (oet) h += oetSec(oet, today);
 
   h += sec('🔥 今週', c.week.length, c.week.length ? '<ul>' + c.week.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">なし</p>');
@@ -424,6 +429,38 @@ function ytSec(list, today) {
   let h = fresh.length ? '<ul>' + fresh.map(v => ytItem(v, today)).join('') + '</ul>' : '<p class="empty">昨日・今日の新着はありません</p>';
   if (older.length) h += '<details><summary class="day">それより前（' + older.length + '本）▸</summary><ul>' + older.map(v => ytItem(v, today)).join('') + '</ul></details>';
   return sec('📺 花子の米国株（新着）', fresh.length, h);
+}
+// ---------- 株価の下落アラート ----------
+// 52週高値からの下落率が基準を超えた銘柄。昨日以降に基準を超えたものを「新規」として上に出す（純粋関数）
+function stockGroups(stocks, today) {
+  const alerts = (stocks && stocks.alerts) || [];
+  const y = addDays(today, -1);
+  const isNew = a => !!a.since && a.since >= y;
+  return {
+    fresh: alerts.filter(isNew),
+    groups: ((stocks && stocks.rules) || []).map(r => ({ label: r.label, threshold: r.threshold, items: alerts.filter(a => a.group === r.group) }))
+  };
+}
+function num(x) { return typeof x === 'number' ? x.toLocaleString('en-US', { maximumFractionDigits: 2 }) : ''; }
+function stockRow(a, today) {
+  const isNew = !!a.since && a.since >= addDays(today, -1);
+  return '<div class="ev sk' + (isNew ? ' new' : '') + '"><span class="t">' + esc(a.ticker) + '</span><span>' +
+    '<span class="dd">' + (a.dd > 0 ? '+' : '') + Number(a.dd).toFixed(1) + '%</span> ' +
+    '<span class="meta">' + esc(a.label || '') + ' · 終値 ' + num(a.last) + ' / 高値 ' + num(a.hi) +
+    (a.hi_date ? '（' + esc(md(a.hi_date)) + '）' : '') + (a.since ? ' · ' + esc(md(a.since)) + '〜' : '') +
+    (a.below === false ? ' · 基準内に戻りかけ' : '') + '</span></span></div>';
+}
+function stockSec(stocks, today) {
+  const g = stockGroups(stocks, today);
+  const total = g.groups.reduce((n, x) => n + x.items.length, 0);
+  let h = '<div class="from">' + esc(stocks.asof ? md(stocks.asof) + ' 終値' : '') + ' · 52週高値からの下落 · 監視 ' + (stocks.watching || 0) + ' 銘柄' +
+    ((stocks.failed || []).length ? ' · 取得失敗 ' + stocks.failed.length : '') + '</div>';
+  h += g.fresh.length ? g.fresh.map(a => stockRow(a, today)).join('') : '<p class="empty">新しく基準を超えた銘柄はありません</p>';
+  g.groups.forEach(x => {
+    h += '<details><summary class="day">' + esc(x.label) + '（' + x.threshold + '%以上） ' + x.items.length + '件 ▸</summary>' +
+      (x.items.length ? x.items.map(a => stockRow(a, today)).join('') : '<p class="empty">なし</p>') + '</details>';
+  });
+  return sec('📉 下落アラート' + (g.fresh.length ? '（新規）' : ''), g.fresh.length ? g.fresh.length : total, h);
 }
 // ---------- ラン・筋トレ ----------
 // 筋トレAIコーチの WEEK_PLAN から、その日の枠を返す。枠が無い曜日（月・木）は null＝手術日で休み（純粋関数）

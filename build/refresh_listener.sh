@@ -61,6 +61,19 @@ if [ -z "$(find "$YT_STAMP" -mmin -120 2>/dev/null)" ] && mkdir "$CONF/youtube.l
 fi
 find "$CONF/youtube.lock" -maxdepth 0 -mmin +30 -exec rmdir {} \; 2>/dev/null
 
+# 株価の下落アラート（Claude 不要）。米国市場の引け後、毎朝6:30を過ぎたら1日1回。
+# 新しく基準を超えた銘柄はリマインダー「株価アラート」で通知し、一覧は次の公開でデイリーホームに載る。
+# 失敗したら印を付けず、30分おきに再試行する
+SK_STAMP="$CONF/stocks-$today"
+if [ "$now_hm" -ge 0630 ] && [ ! -e "$SK_STAMP" ] && [ -z "$(find "$SK_STAMP.fail" -mmin -30 2>/dev/null)" ] \
+   && mkdir "$CONF/stocks.lock" 2>/dev/null; then
+  ( if python3 "$HERE/stock_alert.py" >>"$LOG" 2>&1; then touch "$SK_STAMP"; rm -f "$SK_STAMP.fail"
+    else touch "$SK_STAMP.fail"; log "stock alert failed (30分後に再試行)"; fi
+    rmdir "$CONF/stocks.lock" ) &
+fi
+find "$CONF/stocks.lock" -maxdepth 0 -mmin +30 -exec rmdir {} \; 2>/dev/null
+find "$CONF" -maxdepth 1 -name 'stocks-*' -mtime +3 -delete 2>/dev/null
+
 open_json=$(gh api "repos/$REPO_SLUG/issues?state=open&creator=$OWNER&per_page=30" 2>>"$LOG") || exit 0
 nums() { printf '%s' "$open_json" | jq -r --arg t "$1" '.[] | select(.title == $t) | .number' | grep -E '^[0-9]+$' | tr '\n' ' '; }
 refresh_ids=$(nums refresh)

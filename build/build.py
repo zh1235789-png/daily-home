@@ -312,6 +312,17 @@ def load_youtube(path, keep=10):
     return {"updated": data.get("updated"), "items": items[:keep]}
 
 
+# ---------- 株価の下落アラート ----------
+
+def load_stocks(path):
+    """stock_alert.py が書いた stocks.json。壊れていれば None（ページ側は欄を出さない）。"""
+    data = load_json(path, None)
+    if not isinstance(data, dict) or not isinstance(data.get("alerts"), list):
+        return None
+    alerts = [a for a in data["alerts"] if isinstance(a, dict) and a.get("ticker") and isinstance(a.get("dd"), (int, float))]
+    return {k: data.get(k) for k in ("updated", "asof", "watching", "failed", "rules")} | {"alerts": alerts}
+
+
 # ---------- 組み立て・暗号化 ----------
 
 def load_json(path, default):
@@ -334,6 +345,7 @@ def build(today=None):
         "routines": parse_routines(ROUTINES, today),
         "training": load_training(),
         "youtube": load_youtube(CONF / "youtube.json"),
+        "stocks": load_stocks(CONF / "stocks.json"),
     }
     return data
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """デイリーホームのデータを作る。
 
-Obsidian のタスクハブ・今日のOETノート・ルーティンの実行記録（Claude Routines）、それと ~/.config/daily-home/ に置いた
+Obsidian のタスクハブ・今日のOETノート・ルーティンの実行記録（Claude Routines）、
+筋トレAIコーチの週の予定（ラン・筋トレ）、それと ~/.config/daily-home/ に置いた
 calendar.json / gmail.json（Claude のスケジュールタスクが書く）をまとめて、
 パスフレーズで暗号化した data.enc.json をリポジトリ直下に書き出す。
 
@@ -15,6 +16,8 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -23,6 +26,7 @@ VAULT = HOME / "Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian V
 HUB = VAULT / "03_Personal/03.1_Tasks/タスクハブ.md"
 OET = VAULT / "📌 今日のOET学習.md"
 ROUTINES = VAULT / "09_Projects/Claude Routines"
+COACH = HOME / "workout-ai-coach/index.html"
 CONF = HOME / ".config/daily-home"
 REPO = Path(__file__).resolve().parent.parent
 ITERATIONS = 200_000
@@ -270,6 +274,32 @@ def parse_routines(folder, today, days=2):
     return items
 
 
+# ---------- ラン・筋トレ（筋トレAIコーチの週の予定） ----------
+
+def find_node():
+    # launchd から呼ばれると PATH に Homebrew が無いことがある
+    for c in (shutil.which("node"), "/opt/homebrew/bin/node", "/usr/local/bin/node"):
+        if c and Path(c).exists():
+            return c
+    return None
+
+
+def load_training(coach=COACH):
+    """曜日ごとのラン・部位・種目。読めなければ None（ページ側はセクションを出さない）。"""
+    node = find_node()
+    if not node or not coach.exists():
+        return None
+    try:
+        out = subprocess.run([node, str(REPO / "build/extract_training.mjs"), str(coach)],
+                             capture_output=True, text=True, timeout=20, check=True).stdout
+        data = json.loads(out)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    if not isinstance(data.get("plan"), list) or not isinstance(data.get("menus"), dict):
+        return None
+    return data
+
+
 # ---------- 組み立て・暗号化 ----------
 
 def load_json(path, default):
@@ -290,6 +320,7 @@ def build(today=None):
         "gmail": load_json(CONF / "gmail.json", {"updated": None, "items": []}),
         "refresh": load_json(CONF / "status.json", None),
         "routines": parse_routines(ROUTINES, today),
+        "training": load_training(),
     }
     return data
 

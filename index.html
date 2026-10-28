@@ -87,6 +87,11 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .empty { color: var(--sub); font-size: 13px; padding: 4px 0; }
 .mail .from, .routine .from { font-size: 12px; color: var(--sub); }
 .routine .rl { font-size: 13px; color: var(--sub); }
+.train .sub { font-size: 13px; color: var(--sub); }
+.train ol { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
+.train ol.opt { color: var(--sub); font-size: 13px; }
+.seg { display: inline-flex; gap: 4px; flex: none; }
+.seg button { padding: 3px 10px; font-size: 12px; white-space: nowrap; }
 .pill.acc { background: var(--acc-bg); color: var(--accent); font-weight: 600; }
 .wait { opacity: .6; }
 #bar {
@@ -137,9 +142,9 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!s || typeof s !== 'object') throw new Error('bad');
-    return { pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
+    return { gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
   } catch (e) {
-    return { pass: '', gh: '', checks: {}, sent: {}, outbox: [] };
+    return { gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [] };
   }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存できなくても表示は続ける */ } }
@@ -296,6 +301,8 @@ function render() {
     (c.today.length ? '<ul>' + c.today.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">期限が今日のタスクはありません</p>') +
     (todayEv.length ? '<div class="day today">予定</div>' + todayEv.map(evRow).join('') : ''));
 
+  if (d.training) h += trainSec(d.training, today);
+
   h += sec('✉️ 対応が必要なメール', mailOpen.length,
     mails.length ? '<ul>' + mails.map(m => mailLi(m)).join('') + '</ul>' : '<p class="empty">要対応のメールはありません</p>');
 
@@ -387,6 +394,49 @@ function routineSec(runs, today) {
   }).join('') + '</ul>';
   return sec('🤖 自動作業（今日・昨日）', runs.length, h);
 }
+// ---------- ラン・筋トレ ----------
+// 筋トレAIコーチの WEEK_PLAN から、その日の枠を返す。枠が無い曜日（月・木）は null＝手術日で休み（純粋関数）
+function trainingFor(training, iso) {
+  const dow = new Date(iso + 'T00:00:00Z').getUTCDay();
+  const slot = ((training && training.plan) || []).filter(p => (p.days || []).indexOf(dow) >= 0)[0];
+  return slot || null;
+}
+const GYM_LABEL = { '1': '志村坂上', '2': '本郷' };
+function legText(leg) {
+  if (leg === null || leg === undefined) return '脚なし';
+  if (leg === '不足時のみ') return '脚は週のセット数が足りないときだけ';
+  return { A: '脚A（レッグプレス／ハックスクワット）', B: '脚B（レッグエクステンション＋レッグカール）', C: '脚C（ブルガリアン優先）' }[leg] || '脚' + leg;
+}
+function trainLi(id, title, sub) {
+  const checked = !!S.checks[id];
+  return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
+    '<div class="body"><div class="txt">' + title + '</div>' + (sub || '') + '</div></li>';
+}
+function trainSec(training, today) {
+  const slot = trainingFor(training, today);
+  const next = trainingFor(training, addDays(today, 1));
+  const tmr = '<p class="sub" style="margin:8px 0 0">明日（' + wd(addDays(today, 1)) + '）: ' +
+    (next ? esc(next.focus) + '・' + esc(legText(next.leg).replace(/（.*）/, '')) + ' / ' + esc(next.run.replace(/（.*）/, '')) : '休み（手術日・散歩のみ）') + '</p>';
+  if (!slot) return sec('🏃 ラン・筋トレ', null, '<p class="empty">今日は休み（手術日）。散歩だけ</p>' + tmr, 'train');
+  const m = ((training.menus || {})[S.gym] || {})[slot.key];
+  const seg = '<span class="seg">' + ['1', '2'].map(g => '<button type="button" data-act="gym" data-gym="' + g + '" class="' + (S.gym === g ? '' : 'ghost') + '" aria-pressed="' + (S.gym === g) + '">' + GYM_LABEL[g] + '</button>').join('') + '</span>';
+  const noRun = /^なし/.test(slot.run);
+  let ul = '<ul>';
+  if (!noRun) ul += trainLi('train:' + today + ':run', '🏃 ' + esc(slot.run), '<div class="tags"><span>Garminコーチの今日のワークアウトに従う。インターバルは最大の8〜9割</span></div>');
+  let gym = '<div class="sub">' + esc(legText(slot.leg)) + '</div>';
+  if (m) {
+    gym += '<ol>' + m.must.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
+    if (m.optional && m.optional.length) gym += '<div class="sub" style="margin-top:4px">余裕があれば</div><ol class="opt">' + m.optional.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
+  }
+  if (slot.note) gym += '<div class="tags"><span>※ ' + esc(slot.note) + '</span></div>';
+  if (slot.leg !== null && slot.leg !== undefined) gym += '<div class="tags"><span>※ ハムに痛み（1以上）がある日は脚を外す</span></div>';
+  ul += trainLi('train:' + today + ':gym', '🏋️ <b>' + esc(slot.focus) + '</b>', gym);
+  ul += '</ul>';
+  const head = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span class="sub">ジム</span>' + seg + '</div>';
+  const links = '<div class="tags" style="margin-top:6px"><a href="https://zh1235789-png.github.io/workout-ai-coach/" target="_blank" rel="noopener">筋トレAIコーチ</a><a href="https://zh1235789-png.github.io/hamstring-rehab-tracker/app/" target="_blank" rel="noopener">ハムリハ</a></div>';
+  return sec('🏃 ラン・筋トレ', null, head + ul + tmr + links, 'train');
+}
+
 function oetSec(o, today) {
   const stale = o.date !== today;
   let h = '';
@@ -524,6 +574,7 @@ async function onAppClick(ev) {
     render();
     requestRefresh();
   } else if (act === 'calday') { R.calSel = b.dataset.date; render(); }
+  else if (act === 'gym') { S.gym = b.dataset.gym === '2' ? '2' : '1'; save(); render(); }
   else if (act === 'settings') { R.showToken = !R.showToken; render(); }
   else if (act === 'closeToken') { R.showToken = false; render(); }
   else if (act === 'clearToken') { S.gh = ''; save(); R.showToken = false; R.msg = 'トークンを消しました'; R.err = false; render(); }

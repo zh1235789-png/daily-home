@@ -5,7 +5,7 @@
 新しく基準を超えた銘柄があれば iPhone のリマインダー「株価アラート」で知らせる。
 
   指数連動（VOO・QQQ・VT）           … 10% 以上
-  強い会社（GAFAM＋Hanako30殿堂入り＝2022年版） … 20% 以上
+  強い会社（GAFAM＋殿堂入りのうち大型で安定した会社） … 20% 以上
   その他の歴代Hanako30                 … 30% 以上
 ダメ株トップ10と、花子が避けるべきとした銘柄は対象外。
 銘柄リストは ~/bin/hanako30_drawdown.py の LISTS / DAME_SET / AVOID を使う（新しい年はそちらに足す）。
@@ -31,7 +31,11 @@ REMINDER_LIST = "株価アラート"
 
 INDEX = {"VOO": "S&P500（VOO）", "QQQ": "ナスダック100（QQQ）", "VT": "全世界株（VT）"}
 GAFAM = ["GOOGL", "AAPL", "META", "AMZN", "MSFT"]
-HALL_OF_FAME_YEAR = 2022
+# 殿堂入り（Hanako30 2022年版）のうち、大型で業績の安定した会社だけ（2026-10-28 ユーザー指示）。
+# 外したもの（その他のHanako30として30%基準で見る）: TSLA（値動きが大きい）・KEYS・CMG・INFY（中型）・
+# KRUS（小型）・COIN（暗号資産連動）・INTC・PYPL・TGT（業績が不振）
+STRONG = ["ORCL", "TXN", "INTU", "HD", "COST", "ADBE", "GS", "ASML", "TSM", "AMAT", "SONY",
+          "BAC", "RTX", "NFLX", "LRCX", "QCOM", "XOM"]
 GROUPS = {  # key: (表示名, 基準%)
     "index": ("指数連動", 10.0),
     "strong": ("強い会社", 20.0),
@@ -56,7 +60,7 @@ def universe(lists, dame, avoid):
         for t in s.split():
             years.setdefault(ALIASES.get(t, t), []).append(y)
     out = {t: ("index", []) for t in INDEX}
-    hof = {ALIASES.get(t, t) for t in lists.get(HALL_OF_FAME_YEAR, "").split()}
+    hof = set(STRONG)
     for t in GAFAM:
         if t not in dame and t not in avoid:
             out[t] = ("strong", sorted(years.get(t, [])))

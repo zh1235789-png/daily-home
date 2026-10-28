@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from stock_alert import evaluate, message, universe
 
-LISTS = {2022: "AMZN GOOG INTC KRUS", 2025: "GOOG OKLO CGC MSTR", 2026: "COIN"}
+LISTS = {2022: "AMZN GOOG INTC KRUS COST", 2025: "GOOG OKLO CGC MSTR", 2026: "COIN"}
 UNI = universe(LISTS, dame={"MSTR"}, avoid={"CGC": "避ける"})
 
 
@@ -16,7 +16,8 @@ class Universe(unittest.TestCase):
     def test_groups(self):
         self.assertEqual(UNI["VOO"][0], "index")
         self.assertEqual(UNI["META"][0], "strong")        # GAFAM はリストに無くても強い会社
-        self.assertEqual(UNI["KRUS"][0], "strong")        # 殿堂入り（2022年版）
+        self.assertEqual(UNI["COST"][0], "strong")        # 殿堂入りのうち大型で安定
+        self.assertEqual(UNI["KRUS"][0], "other")         # 殿堂入りでも小型・不安定なものは30%基準
         self.assertEqual(UNI["GOOGL"], ("strong", [2022, 2025]))  # GOOG は GOOGL にまとめる
         self.assertNotIn("GOOG", UNI)
         self.assertEqual(UNI["OKLO"], ("other", [2025]))
@@ -27,7 +28,7 @@ class Universe(unittest.TestCase):
 
 class Evaluate(unittest.TestCase):
     def test_thresholds(self):
-        quotes = {"VOO": q(-10.0), "QQQ": q(-9.9), "GOOGL": q(-20.4), "KRUS": q(-19), "OKLO": q(-29), "COIN": q(-31)}
+        quotes = {"VOO": q(-10.0), "QQQ": q(-9.9), "GOOGL": q(-20.4), "COST": q(-19), "KRUS": q(-29), "OKLO": q(-29), "COIN": q(-31)}
         alerts, notify, state = evaluate(quotes, UNI, {}, "2026-10-28")
         self.assertEqual([a["ticker"] for a in alerts], ["VOO", "GOOGL", "COIN"])  # 指数→強い→その他
         self.assertEqual(sorted(notify), ["COIN", "GOOGL", "VOO"])
@@ -59,7 +60,7 @@ class Evaluate(unittest.TestCase):
         self.assertEqual(st2, {"GOOGL": st["GOOGL"]})     # 取得失敗は保持、対象外（ダメ株）は捨てる
 
     def test_message(self):
-        quotes = {t: q(-35) for t in ["VOO", "GOOGL", "KRUS", "OKLO", "COIN"]}
+        quotes = {t: q(-35) for t in ["VOO", "GOOGL", "COST", "OKLO", "COIN"]}
         alerts, notify, _ = evaluate(quotes, UNI, {}, "2026-10-28")
         title, body = message(alerts, notify)
         self.assertIn("ほか1件", title)

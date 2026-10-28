@@ -58,7 +58,8 @@ def universe(lists, dame, avoid):
     out = {t: ("index", []) for t in INDEX}
     hof = {ALIASES.get(t, t) for t in lists.get(HALL_OF_FAME_YEAR, "").split()}
     for t in GAFAM:
-        out[t] = ("strong", sorted(years.get(t, [])))
+        if t not in dame and t not in avoid:
+            out[t] = ("strong", sorted(years.get(t, [])))
     for t, ys in years.items():
         if t in out or t in dame or t in avoid:
             continue
@@ -79,10 +80,12 @@ def quote(t):
             "dd": round((last / hi - 1) * 100, 1), "date": day(last_ts)}
 
 
-def evaluate(quotes, uni, state, today):
+def evaluate(quotes, uni, state, today, failed=()):
     """基準超えの一覧と、今回知らせるもの、次回用の状態を返す（純粋関数）。
 
     quotes: {ticker: quote()}、state: {ticker: {"since", "notified"}}
+    failed: 一時的に取れなかった銘柄。通知状態をそのまま残す（次に取れたとき再通知しない）。
+    監視対象（uni）から外れた銘柄の状態は捨てる。
     """
     alerts, notify, new_state = [], [], {}
     for t, q in quotes.items():
@@ -101,6 +104,9 @@ def evaluate(quotes, uni, state, today):
         alerts.append({"ticker": t, "name": INDEX.get(t, t), "group": group, "label": label,
                        "threshold": th, "years": years, "since": st["since"],
                        "new": t in notify, "below": drop >= th, **q})
+    for t in failed:
+        if t in uni and t in state:
+            new_state[t] = state[t]
     order = list(GROUPS)
     alerts.sort(key=lambda a: (order.index(a["group"]), a["dd"]))
     return alerts, notify, new_state
@@ -156,7 +162,7 @@ def main():
         print(f"株価の取得に失敗（{len(failed)}/{len(uni)}件）。stocks.json は前回のまま", file=sys.stderr)
         sys.exit(1)
     state = load_json(STATE, {})
-    alerts, notify, new_state = evaluate(quotes, uni, state, today)
+    alerts, notify, new_state = evaluate(quotes, uni, state, today, failed)
     OUT.write_text(json.dumps({
         "updated": now.isoformat(timespec="minutes"),
         "asof": max(q["date"] for q in quotes.values()),

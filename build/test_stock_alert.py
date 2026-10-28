@@ -22,6 +22,7 @@ class Universe(unittest.TestCase):
         self.assertEqual(UNI["OKLO"], ("other", [2025]))
         self.assertNotIn("MSTR", UNI)                     # ダメ株は対象外
         self.assertNotIn("CGC", UNI)                      # 避ける銘柄も対象外
+        self.assertNotIn("META", universe(LISTS, dame={"META"}, avoid={}))  # GAFAMでもダメ株なら外す
 
 
 class Evaluate(unittest.TestCase):
@@ -50,6 +51,12 @@ class Evaluate(unittest.TestCase):
         self.assertEqual((alerts, st3), ([], {}))         # 戻したら解除
         _, notify, _ = evaluate({"GOOGL": q(-20)}, UNI, st3, "2026-10-30")
         self.assertEqual(notify, ["GOOGL"])               # 解除後にまた割れたら通知
+
+    def test_state_on_failure_and_exclusion(self):
+        st = {"GOOGL": {"since": "2026-10-20", "notified": 21.0}, "MSTR": {"since": "2026-10-01", "notified": 40.0}}
+        _, notify, st2 = evaluate({}, UNI, st, "2026-10-28", failed=["GOOGL"])
+        self.assertEqual(notify, [])
+        self.assertEqual(st2, {"GOOGL": st["GOOGL"]})     # 取得失敗は保持、対象外（ダメ株）は捨てる
 
     def test_message(self):
         quotes = {t: q(-35) for t in ["VOO", "GOOGL", "KRUS", "OKLO", "COIN"]}

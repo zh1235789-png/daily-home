@@ -88,6 +88,10 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .mail .from, .routine .from { font-size: 12px; color: var(--sub); }
 .routine .rl { font-size: 13px; color: var(--sub); }
 .train .sub { font-size: 13px; color: var(--sub); }
+.yt .head { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.yt ul.pts { list-style: disc; padding-left: 18px; margin: 4px 0 0; font-size: 13px; }
+.yt ul.pts li { margin: 2px 0; }
+.yt .hn { font-size: 13px; margin-top: 4px; padding: 4px 8px; border-radius: 6px; background: var(--acc-bg); }
 .train ol { margin: 4px 0 0; padding-left: 20px; font-size: 14px; }
 .train ol.opt { color: var(--sub); font-size: 13px; }
 .seg { display: inline-flex; gap: 4px; flex: none; }
@@ -309,6 +313,9 @@ function render() {
   const runs = routineList(d, today);
   if (runs.length) h += routineSec(runs, today);
 
+  const yt = ytList(d, today);
+  if (yt.length) h += ytSec(yt, today);
+
   if (oet) h += oetSec(oet, today);
 
   h += sec('🔥 今週', c.week.length, c.week.length ? '<ul>' + c.week.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">なし</p>');
@@ -393,6 +400,30 @@ function routineSec(runs, today) {
       (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + '</div></li>';
   }).join('') + '</ul>';
   return sec('🤖 自動作業（今日・昨日）', runs.length, h);
+}
+// ---------- 花子の米国株（YouTube の要約） ----------
+// 直近7日分（新しい順）。昨日以降のものを「新着」とする（純粋関数）
+function ytList(data, today) {
+  const from = addDays(today, -6);
+  return ((data && data.youtube && data.youtube.items) || []).filter(v => v.date && v.date >= from && v.date <= today);
+}
+function ytItem(v, today) {
+  const when = v.date === today ? '今日' : v.date === addDays(today, -1) ? '昨日' : md(v.date);
+  const meta = [when, v.kind === 'live' ? 'ライブ' : '動画'].concat(v.minutes ? [v.minutes + '分'] : []).join(' · ');
+  return '<li class="task yt"><div class="body"><div class="from">' + esc(meta) + '</div>' +
+    '<div class="txt"><a href="' + esc(v.url) + '" target="_blank" rel="noopener">' + esc(v.title) + '</a></div>' +
+    (v.headline ? '<div class="head">' + esc(v.headline) + '</div>' : '') +
+    ((v.points || []).length ? '<ul class="pts">' + v.points.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' : '') +
+    (v.hanako ? '<div class="hn">🙋‍♀️ ' + esc(v.hanako) + '</div>' : '') +
+    ((v.tickers || []).length ? '<div class="tags">' + v.tickers.map(t => '<span class="due">' + esc(t) + '</span>').join('') + '</div>' : '') +
+    '</div></li>';
+}
+function ytSec(list, today) {
+  const fresh = list.filter(v => v.date >= addDays(today, -1));
+  const older = list.filter(v => v.date < addDays(today, -1));
+  let h = fresh.length ? '<ul>' + fresh.map(v => ytItem(v, today)).join('') + '</ul>' : '<p class="empty">昨日・今日の新着はありません</p>';
+  if (older.length) h += '<details><summary class="day">それより前（' + older.length + '本）▸</summary><ul>' + older.map(v => ytItem(v, today)).join('') + '</ul></details>';
+  return sec('📺 花子の米国株（新着）', fresh.length, h);
 }
 // ---------- ラン・筋トレ ----------
 // 筋トレAIコーチの WEEK_PLAN から、その日の枠を返す。枠が無い曜日（月・木）は null＝手術日で休み（純粋関数）

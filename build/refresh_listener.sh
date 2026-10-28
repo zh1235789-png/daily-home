@@ -52,6 +52,15 @@ for slot in 1250 2150; do
 done
 find "$CONF" -maxdepth 1 -name 'scheduled-*' -mtime +3 -delete 2>/dev/null
 
+# 花子の米国株（YouTube）の字幕取得（Claude 不要）。2時間おき。要約は朝夕の Claude の回が行う
+YT_STAMP="$CONF/youtube-fetched"
+if [ -z "$(find "$YT_STAMP" -mmin -120 2>/dev/null)" ] && mkdir "$CONF/youtube.lock" 2>/dev/null; then
+  touch "$YT_STAMP"
+  # 30秒ほどかかるので裏で回し、更新ボタンの処理を待たせない
+  ( python3 "$HERE/youtube_fetch.py" >>"$LOG" 2>&1 || log "youtube fetch failed"; rmdir "$CONF/youtube.lock" ) &
+fi
+find "$CONF/youtube.lock" -maxdepth 0 -mmin +30 -exec rmdir {} \; 2>/dev/null
+
 open_json=$(gh api "repos/$REPO_SLUG/issues?state=open&creator=$OWNER&per_page=30" 2>>"$LOG") || exit 0
 nums() { printf '%s' "$open_json" | jq -r --arg t "$1" '.[] | select(.title == $t) | .number' | grep -E '^[0-9]+$' | tr '\n' ' '; }
 refresh_ids=$(nums refresh)
@@ -110,13 +119,17 @@ cd "$HOME/daily-home" || exit 1
 # ファイルの許可は Edit(~/…) で書き（Write(…) やスラッシュ1本の絶対パスは効かない）、
 # プロジェクト外の設定フォルダは --add-dir で作業範囲に入れる。公開はこのスクリプトが後で行う。
 # claude が 0 で終わっても書けていないことがあるので、ファイルが新しくなったかで成否を判断する
+yt_out="$(python3 "$HERE/youtube_fetch.py" --pending 2>&1)"
 prompt="$prompt
 
-（このコマンドライン実行では手順3の publish.sh は実行しない。2つのJSONを書いたら報告して終わる。公開は呼び出し側が行う）"
+（このコマンドライン実行では手順4の publish.sh は実行しない。JSONを書いたら報告して終わる。公開は呼び出し側が行う。
+手順3の取得スクリプトは呼び出し側で実行済み。その出力:
+$yt_out
+）"
 before="$(stat -f %m "$CONF/gmail.json" "$CONF/calendar.json" 2>/dev/null | tr '\n' ' ')"
 # shellcheck disable=SC2086
 claude -p "$prompt" --model sonnet --add-dir "$CONF" \
-  --allowedTools Read "Edit(~/.config/daily-home/calendar.json)" "Edit(~/.config/daily-home/gmail.json)" $tools \
+  --allowedTools Read "Edit(~/.config/daily-home/calendar.json)" "Edit(~/.config/daily-home/gmail.json)" "Edit(~/.config/daily-home/youtube.json)" $tools \
   >>"$LOG" 2>&1
 after="$(stat -f %m "$CONF/gmail.json" "$CONF/calendar.json" 2>/dev/null | tr '\n' ' ')"
 if [ "$before" != "$after" ]; then

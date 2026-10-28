@@ -4,7 +4,7 @@ import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import tempfile
-from build import parse_due, parse_hub, parse_routines
+from build import load_youtube, parse_due, parse_hub, parse_routines
 
 T = dt.date(2026, 10, 20)
 
@@ -72,6 +72,19 @@ class Routines(unittest.TestCase):
 
     def test_missing_folder(self):
         self.assertEqual(parse_routines(Path("/nonexistent/x"), T), [])
+
+
+class Youtube(unittest.TestCase):
+    def test_newest_first_and_broken(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "youtube.json"
+            self.assertIsNone(load_youtube(p))
+            p.write_text("{壊れた")
+            self.assertIsNone(load_youtube(p))
+            p.write_text('{"updated":"x","items":[{"id":"a","title":"A","date":"2026-10-26"},'
+                         '{"id":"b","title":"B","date":"2026-10-27"},{"title":"IDなし"}]}')
+            y = load_youtube(p, keep=5)
+            self.assertEqual([i["id"] for i in y["items"]], ["b", "a"])
 
 
 if __name__ == "__main__":

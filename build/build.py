@@ -300,6 +300,18 @@ def load_training(coach=COACH):
     return data
 
 
+# ---------- 花子の米国株（YouTube の要約） ----------
+
+def load_youtube(path, keep=10):
+    """youtube_fetch.py が取った字幕を Claude が要約した youtube.json。新しい順に keep 件。"""
+    data = load_json(path, None)
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        return None
+    items = [it for it in data["items"] if isinstance(it, dict) and it.get("id") and it.get("title")]
+    items.sort(key=lambda x: (x.get("date") or "", x.get("id")), reverse=True)
+    return {"updated": data.get("updated"), "items": items[:keep]}
+
+
 # ---------- 組み立て・暗号化 ----------
 
 def load_json(path, default):
@@ -321,6 +333,7 @@ def build(today=None):
         "refresh": load_json(CONF / "status.json", None),
         "routines": parse_routines(ROUTINES, today),
         "training": load_training(),
+        "youtube": load_youtube(CONF / "youtube.json"),
     }
     return data
 

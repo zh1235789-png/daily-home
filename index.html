@@ -158,6 +158,7 @@ button.ghost { background: var(--chip); color: var(--ink); font-weight: 400; }
 'use strict';
 const KEY = 'dh.v1';
 const WD = ['日', '月', '火', '水', '木', '金', '土'];
+const TABS = ['home', 'eng', 'invest'];
 let DATA = null;
 let S = loadState();
 
@@ -165,7 +166,7 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!s || typeof s !== 'object') throw new Error('bad');
-    return { tab: s.tab === 'invest' ? 'invest' : 'home', gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
+    return { tab: TABS.indexOf(s.tab) >= 0 ? s.tab : 'home', gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
   } catch (e) {
     return { tab: 'home', gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [] };
   }
@@ -300,7 +301,6 @@ function render() {
   const cal = ((d.calendar && d.calendar.events) || []).filter(e => e.date >= today && e.date <= addDays(today, 6));
   const mails = ((d.gmail && d.gmail.items) || []).filter(m => !(S.checks['mail:' + m.url] && S.checks['mail:' + m.url] < today));
   const mailOpen = mails.filter(m => !m.waiting && !S.checks['mail:' + m.url]);
-  const oet = d.oet;
 
   const ageH = (Date.now() - Date.parse(d.generated)) / 3600000;
   let h = '<header><h1>' + md(today) + '（' + wd(today) + '）</h1><div class="right"><div class="meta' + (ageH > 36 ? ' stale' : '') + '">' +
@@ -312,6 +312,8 @@ function render() {
 
   if (S.tab === 'invest') {
     h += investTab(d, today);
+  } else if (S.tab === 'eng') {
+    h += engTab(d, today);
   } else {
   h += '<div class="summary">' +
     (c.overdue.length ? '<span class="pill red">期限切れ ' + c.overdue.length + '</span>' : '') +
@@ -335,8 +337,6 @@ function render() {
   const runs = routineList(d, today);
   if (runs.length) h += routineSec(runs, today);
 
-
-  if (oet) h += oetSec(oet, today);
 
   h += sec('🔥 今週', c.week.length, c.week.length ? '<ul>' + c.week.map(it => taskLi(it, today)).join('') + '</ul>' : '<p class="empty">なし</p>');
 
@@ -461,7 +461,47 @@ function tabNav(tab, d, today) {
   const fresh = d && d.stocks ? stockGroups(d.stocks, today).fresh.length : 0;
   const btn = (key, ic, label, badge) => '<button type="button" class="tb' + (tab === key ? ' sel' : '') + '" data-act="tab" data-tab="' + key + '" aria-pressed="' + (tab === key) + '">' +
     '<span class="ic">' + ic + '</span>' + label + (badge ? '<span class="badge">' + badge + '</span>' : '') + '</button>';
-  return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('invest', '📈', '投資', fresh) + '</nav>';
+  return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('eng', '🇬🇧', '英語', engLeft(d, S.checks, today)) + btn('invest', '📈', '投資', fresh) + '</nav>';
+}
+// ---------- 英語タブ ----------
+// 毎日の英語ルーティン。Speak は月・木・土日（土日はどちらか1回）。チェックはこの端末だけに残る（純粋関数）
+const ENG_DAILY = [
+  ['duo', 'DUO 例文英訳', '5文'],
+  ['shunkan', '瞬間英作文', '30問'],
+  ['shadow', 'DUO シャドーイング', '3〜4セクション（聞く→見て重ねる→見ずに重ねる）'],
+  ['langaku', 'Langaku', '漫画を英語で'],
+];
+function engRoutine(today) {
+  const dow = new Date(today + 'T00:00:00Z').getUTCDay();
+  const list = ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
+  if (dow === 1 || dow === 4) list.push({ id: 'eng:' + today + ':speak', name: 'Speak（AI英会話）', note: '10分・シャドーイングの後に' });
+  if (dow === 0 || dow === 6) list.push({ id: 'eng:' + today + ':speak', name: 'Speak（AI英会話）', note: '10分・土日どちらか1回' });
+  return list;
+}
+// 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
+function engLeft(d, checks, today) {
+  const oet = d && d.oet && d.oet.date === today ? (d.oet.menu || []) : [];
+  return oet.concat(engRoutine(today)).filter(x => !checks[x.id]).length;
+}
+const ENG_APPS = [
+  ['OET 週次トラッカー', 'oet-weekly-tracker'],
+  ['Listening エラーログ', 'oet-listening-errorlog'],
+  ['Reading 通勤ドリル', 'oet-reading-commute'],
+  ['Speaking カード', 'oet-flashcards'],
+  ['瞬間英作文', 'shunkan-eisakubun'],
+];
+function engTab(d, today) {
+  let h = d.oet ? oetSec(d.oet, today) : sec('🎧 OET', null, '<p class="empty">今日のOETノートがまだありません（毎朝6:30に作成）</p>');
+  const rt = engRoutine(today);
+  h += sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, '<ul>' + rt.map(r => {
+    const checked = !!S.checks[r.id];
+    return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(r.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
+      '<div class="body"><div class="txt"><b>' + esc(r.name) + '</b></div><div class="tags"><span>' + esc(r.note) + '</span></div></div></li>';
+  }).join('') + '</ul>');
+  h += sec('🎯 OET 目標', null, '<p class="lead">受験 <b>2027年1〜2月</b>（未申込）／必要スコア L350・R360・W350・S360</p>');
+  h += sec('🔗 英語のアプリ', null, '<div class="tags">' + ENG_APPS.map(a =>
+    '<a href="https://zh1235789-png.github.io/' + a[1] + '/" target="_blank" rel="noopener">' + esc(a[0]) + '</a>').join('') + '</div>');
+  return h;
 }
 // ---------- 買い候補（下落銘柄を花子の基準で） ----------
 const PICK_LV = [['buy', '🟢 候補'], ['watch', '🟡 様子見'], ['avoid', '🔴 見送り']];
@@ -705,7 +745,7 @@ async function onAppClick(ev) {
     render();
     requestRefresh();
   } else if (act === 'calday') { R.calSel = b.dataset.date; render(); }
-  else if (act === 'tab') { S.tab = b.dataset.tab === 'invest' ? 'invest' : 'home'; save(); render(); window.scrollTo(0, 0); }
+  else if (act === 'tab') { S.tab = TABS.indexOf(b.dataset.tab) >= 0 ? b.dataset.tab : 'home'; save(); render(); window.scrollTo(0, 0); }
   else if (act === 'gym') { S.gym = b.dataset.gym === '2' ? '2' : '1'; save(); render(); }
   else if (act === 'settings') { R.showToken = !R.showToken; render(); }
   else if (act === 'closeToken') { R.showToken = false; render(); }
@@ -752,6 +792,7 @@ async function start() {
   const walk = (arr) => (arr || []).forEach(it => { live.add(it.id); walk(it.children); });
   ['week', 'dated', 'big', 'someday'].forEach(k => walk(DATA.hub[k]));
   ((DATA.oet && DATA.oet.menu) || []).forEach(m => live.add(m.id));
+  engRoutine(todayISO()).forEach(r => live.add(r.id));
   ((DATA.gmail && DATA.gmail.items) || []).forEach(m => live.add('mail:' + m.url));
   Object.keys(S.checks).forEach(k => { if (!live.has(k)) delete S.checks[k]; });
   Object.keys(S.sent).forEach(k => { if (!live.has(k)) delete S.sent[k]; });
@@ -786,6 +827,10 @@ function bind() {
     t.closest('li').classList.toggle('done', t.checked);
     if (S.gh && hubIds(DATA).has(id)) queueDone(id, t.checked);
     updateBar();
+    // 英語タブのバッジ（未完了数）を合わせる
+    const nav = document.querySelector('.tabbar');
+    if (nav) nav.outerHTML = tabNav(S.tab, DATA, todayISO());
+    if (id.indexOf('eng:') === 0) render(); // 「済 n/4」を合わせる
   });
   document.getElementById('shareBtn').addEventListener('click', async () => {
     const items = pendingReports(DATA, S.checks, S.sent);

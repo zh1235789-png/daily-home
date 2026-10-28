@@ -54,7 +54,9 @@ test('タブバー: 選択中に印、投資タブに新規の件数', () => {
   const h = app.tabNav('invest', { stocks }, '2026-10-28');
   assert.match(h, /class="tb sel" data-act="tab" data-tab="invest"/);
   assert.match(h, /<span class="badge">2<\/span>/);
-  assert.ok(!app.tabNav('home', {}, '2026-10-28').includes('badge'));
+  // 株価データが無ければ投資タブにバッジは出ない（英語タブには未完了数が出る）
+  const investBtn = app.tabNav('home', {}, '2026-10-28').split('data-tab="invest"')[1];
+  assert.ok(!investBtn.includes('badge'));
 });
 
 test('保存したタブを読み戻す・不正な値はホーム', () => {

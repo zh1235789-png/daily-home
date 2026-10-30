@@ -50,6 +50,19 @@ test('ラン・筋トレのチェックはタスクハブへ送らない', () =>
   assert.equal(app.doneBody(['train:2026-10-28:run']), '');
 });
 
+test('今週の運動は月〜日の表（ラン・筋トレ・ケトルベル）で今日を強調し、KBメニューを出す', () => {
+  const t = { ...training, plan: training.plan.map(p => p.key === 'wed' ? { ...p, runShort: 'ロング走', gymShort: '背中＋二頭', kbShort: 'しっかり' } : p),
+    kbMenus: { light: { label: '軽め（火・金・土）', items: ['片脚RDL 左右3×8'] } } };
+  const h = app.weekPlanSec(t, '2026-10-28');   // 水
+  const days = [...h.matchAll(/<tr[^>]*><td>(.)<\/td>/g)].map(m => m[1]).join('');
+  assert.equal(days, '月火水木金土日');
+  assert.match(h, /<tr class="today"><td>水<\/td><td>ロング走<\/td><td>背中＋二頭<\/td><td>しっかり<\/td>/);
+  assert.match(h, /<td>火<\/td><td>朝ラン<\/td><td>胸＋三頭<\/td><td><\/td>/);   // 短い名前が無い版はそのまま
+  assert.equal((h.match(/オフ（手術日）/g) || []).length, 4);   // この fixture は火・水・土だけ（月・木・金・日が休み）
+  assert.match(h, /軽め（火・金・土）<\/b><ul><li>片脚RDL 左右3×8/);
+  assert.doesNotMatch(app.weekPlanSec(training, '2026-10-28'), /ケトルベルのメニュー/);
+});
+
 test('抽出スクリプト：WEEK_PLAN と DAY_MENUS を読める', () => {
   const dir = mkdtempSync(join(tmpdir(), 'dh-'));
   const f = join(dir, 'index.html');
@@ -71,4 +84,5 @@ test('抽出スクリプト：本物の筋トレAIコーチを読める（予定
   assert.ok(out.plan.length > 0);
   out.plan.forEach((p) => { assert.ok(Array.isArray(p.days) && p.key && p.focus && typeof p.run === 'string'); });
   assert.ok(out.menus['1'] && out.menus['2']);
+  if (out.kbMenus) Object.values(out.kbMenus).forEach((m) => { assert.ok(m.label && Array.isArray(m.items)); });
 });

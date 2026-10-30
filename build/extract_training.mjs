@@ -17,4 +17,6 @@ function literal(name, close) {
 
 const plan = literal('WEEK_PLAN', '];');
 const menus = literal('DAY_MENUS', '};');
-process.stdout.write(JSON.stringify({ plan, menus }));
+// 自宅ケトルベルのメニュー（2026-10-30〜。無い版のコーチでも動くように任意）
+const kbMenus = html.includes('const KB_MENUS = ') ? literal('KB_MENUS', '};') : null;
+process.stdout.write(JSON.stringify({ plan, menus, kbMenus }));

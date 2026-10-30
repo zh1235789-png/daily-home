@@ -96,6 +96,16 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .more { font-size: 10px; color: var(--sub); text-align: center; }
 .calday { margin-top: 10px; }
 .ev .t.task { color: var(--red); }
+.wt { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.wt th { font-size: 11.5px; color: var(--sub); font-weight: 600; text-align: left; padding: 4px; border-bottom: 1px solid var(--line); }
+.wt td { padding: 7px 4px; border-bottom: 1px solid var(--line); vertical-align: top; line-height: 1.35; word-break: break-word; }
+.wt th:first-child, .wt td:first-child { width: 24px; font-weight: 700; padding-left: 6px; }
+.wt tr.today td { background: var(--acc-bg); }
+.wt td.off { color: var(--sub); }
+.kbm { margin-top: 10px; font-size: 13px; line-height: 1.5; }
+.kbm summary { cursor: pointer; font-weight: 600; }
+.kbm b { display: block; margin-top: 6px; }
+.kbm ul { margin: 2px 0 0 18px; padding: 0; }
 .day.today { color: var(--accent); }
 .lead { font-size: 13px; color: var(--sub); margin: 0 0 6px; padding-left: 10px; border-left: 3px solid var(--line); }
 .empty { color: var(--sub); font-size: 13px; padding: 4px 0; }
@@ -532,15 +542,23 @@ function foodSec(training, today) {
     '<p class="lead"><b>' + t[1].toLocaleString() + ' kcal</b> ／ P ' + t[2] + 'g・F ' + t[3] + 'g・C ' + t[4] + 'g</p>' +
     '<div class="tags"><span>Pは150g前後で十分（多すぎない）</span><span>クレアチンは5g</span><span>塩分控えめ</span></div>');
 }
-// 今日から7日分の運動の予定（純粋関数）
+// 週間の運動（ラン・筋トレ・ケトルベル）を月〜日の表で。今日の行を強調（純粋関数）
 function weekPlanSec(training, today) {
-  let h = '';
+  const mon = addDays(today, -((new Date(today + 'T00:00:00Z').getUTCDay() + 6) % 7));
+  let rows = '';
   for (let i = 0; i < 7; i++) {
-    const iso = addDays(today, i);
+    const iso = addDays(mon, i);
     const slot = trainingFor(training, iso);
-    const what = slot ? esc(slot.focus) + (/^なし/.test(slot.run) ? '' : ' ＋ ' + esc(slot.run.replace(/（.*）/, ''))) : '<span class="meta">休み（手術日）</span>';
-    h += '<div class="ev"><span class="t">' + (i === 0 ? '今日' : wd(iso)) + '</span><span>' + what + '</span></div>';
+    const cls = iso === today ? ' class="today"' : '';
+    rows += slot
+      ? '<tr' + cls + '><td>' + wd(iso) + '</td><td>' + esc(slot.runShort || slot.run.replace(/（.*）/, '')) + '</td><td>' + esc(slot.gymShort || slot.focus) + '</td><td>' + esc(slot.kbShort || '') + '</td></tr>'
+      : '<tr' + cls + '><td>' + wd(iso) + '</td><td class="off">散歩</td><td class="off">オフ（手術日）</td><td class="off">—</td></tr>';
   }
+  let h = '<table class="wt"><thead><tr><th></th><th>🏃 ラン</th><th>🏋️ 筋トレ</th><th>🔔 ケトルベル</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  const kb = training.kbMenus;
+  if (kb) h += '<details class="kbm"><summary>🔔 ケトルベルのメニュー</summary>' + Object.values(kb).map(m =>
+    '<b>' + esc(m.label) + '</b><ul>' + m.items.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>').join('') +
+    '<p class="sub" style="margin:4px 0 0">ランの日はランの後に。翌朝ハムの張りが残っていたら軽めにする</p></details>';
   return sec('📅 今週の運動', null, h);
 }
 function healthTab(d, today) {

@@ -32,11 +32,12 @@ test('日種別の目標カロリー: 両方1900・筋トレだけ1850・休み1
   assert.match(app.foodSec(training, '2026-10-29'), /1,650 kcal/);
 });
 
-test('健康タブ: 筋トレ・食事・7日分の予定・アプリ。予定が無くても落ちない', () => {
+test('健康タブ: 筋トレ・食事・週間の表・アプリ。予定が無くても落ちない', () => {
   const h = app.healthTab({ training }, '2026-10-28');
   assert.match(h, /🏃 ラン・筋トレ/);
   assert.match(h, /🍚 今日の食事の目標/);
-  assert.equal((h.match(/class="ev"/g) || []).length, 7);
+  assert.equal((h.match(/<tr[ >]/g) || []).length, 8);   // 見出し＋月〜日
+  assert.match(h, /📅 今週の運動/);
   assert.match(h, /healthtracker/);
   assert.match(app.healthTab({}, '2026-10-28'), /読み込めませんでした/);
 });

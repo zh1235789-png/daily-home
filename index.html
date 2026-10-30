@@ -494,7 +494,6 @@ function engLeft(d, checks, today) {
   return oet.concat(engRoutine(today)).filter(x => !checks[x.id]).length;
 }
 const ENG_APPS = [
-  ['OET 週次トラッカー', 'oet-weekly-tracker'],
   ['Listening エラーログ', 'oet-listening-errorlog'],
   ['Reading 通勤ドリル', 'oet-reading-commute'],
   ['Speaking カード', 'oet-flashcards'],
@@ -694,7 +693,7 @@ function oetSec(o, today) {
     return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(m.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
       '<div class="body"><div class="txt">' + esc(m.prio) + ' <b>' + esc(m.skill) + '</b> ' + inline(m.text) + '</div><div class="tags"><span>' + esc(m.time) + '</span></div></div></li>';
   }).join('') + '</ul>';
-  h += '<div class="tags" style="margin-top:6px">' + noteLink('📌 今日のOET学習') + '<a href="https://zh1235789-png.github.io/oet-weekly-tracker/" target="_blank" rel="noopener">週次トラッカー</a></div>';
+  h += '<div class="tags" style="margin-top:6px">' + noteLink('📌 今日のOET学習') + '</div>';
   return sec('🎧 OET', o.total ? '（' + esc(o.total) + '）' : null, h);
 }
 

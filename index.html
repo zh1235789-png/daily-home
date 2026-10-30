@@ -518,7 +518,7 @@ function engTab(d, today) {
 function trainIds(training, today) {
   const slot = trainingFor(training, today);
   if (!slot) return [];
-  return (/^なし/.test(slot.run) ? [] : ['train:' + today + ':run']).concat(['train:' + today + ':gym']);
+  return (/^なし/.test(slot.run) ? [] : ['train:' + today + ':run']).concat(['train:' + today + ':gym'], slot.kb ? ['train:' + today + ':kb'] : []);
 }
 function trainLeft(d, checks, today) {
   return trainIds(d && d.training, today).filter(id => !checks[id]).length;
@@ -671,7 +671,14 @@ function trainSec(training, today) {
   if (slot.note) gym += '<div class="tags"><span>※ ' + esc(slot.note) + '</span></div>';
   if (slot.leg !== null && slot.leg !== undefined) gym += '<div class="tags"><span>※ ハムに痛みがある日は脚を外す</span></div>';
   ul += trainLi('train:' + today + ':gym', '🏋️ <b>' + esc(slot.focus) + '</b>', gym);
-  if (slot.kb) ul += '<li><div class="sub">🔔 自宅ケトルベル: ' + esc(slot.kb) + '（ランの日はランの後）</div></li>';
+  if (slot.kb) {
+    const kbm = training.kbMenus || {};
+    const keys = [slot.kbLevel].concat(slot.kbUpper ? ['upper'] : []).filter(k => kbm[k]);
+    let kb = keys.length ? '' : '<div class="sub">' + esc(slot.kb) + '</div>';   // メニューが無い古いデータは説明文だけ
+    keys.forEach((k, i) => { kb += '<div class="sub"' + (i ? ' style="margin-top:4px"' : '') + '>' + esc(kbm[k].label) + '</div><ol>' + kbm[k].items.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>'; });
+    kb += '<div class="tags"><span>※ ランの日はランの後に。翌朝ハムの張りが残っていたら軽めに</span></div>';
+    ul += trainLi('train:' + today + ':kb', '🔔 <b>自宅ケトルベル（' + esc(slot.kbShort || slot.kb.replace(/（.*/, '')) + '）</b>', kb);
+  }
   ul += '</ul>';
   const head = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span class="sub">ジム</span>' + seg + '</div>';
   return sec('🏃 ラン・筋トレ', null, head + ul + tmr, 'train');

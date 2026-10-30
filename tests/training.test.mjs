@@ -10,10 +10,11 @@ const app = loadApp({ today: '2026-10-28T09:00:00+09:00' });
 const training = {
   plan: [
     { days: [2], key: 'tue', label: '火', focus: '胸＋三頭', run: '朝ラン', leg: 'B', note: '' },
-    { days: [3], key: 'wed', label: '水', focus: '背中＋二頭', run: 'ロング走（朝）', leg: null, kb: 'しっかり（スイング中心）', note: '脚なし' },
+    { days: [3], key: 'wed', label: '水', focus: '背中＋二頭', run: 'ロング走（朝）', leg: null, kb: 'しっかり（スイング中心）', kbShort: 'しっかり', kbLevel: 'heavy', kbUpper: true, note: '脚なし' },
     { days: [6], key: 'sat', label: '土', focus: '胸と背中', run: 'なし（朝から仕事）', leg: 'C', note: '' },
   ],
   menus: { '1': { wed: { must: ['フロントプル', 'シュラッグ'], optional: ['ハンマーカール'] } }, '2': {} },
+  kbMenus: { heavy: { label: 'しっかり（水・日）', items: ['両手スイング'] }, upper: { label: '上半身（日曜）', items: ['ハンマーカール'] } },
 };
 
 test('曜日で枠を選ぶ（2026-10-28は水曜）', () => {
@@ -33,7 +34,9 @@ test('今日の種目とランが出る・休みの日は散歩', () => {
   assert.match(h, /フロントプル/);
   assert.match(h, /脚なし/);
   assert.match(h, /明日（木）: 休み/);
-  assert.match(h, /🔔 自宅ケトルベル: しっかり（スイング中心）（ランの日はランの後）/);
+  assert.match(h, /data-id="train:2026-10-28:kb"/);
+  assert.match(h, /🔔 <b>自宅ケトルベル（しっかり）<\/b>/);
+  assert.match(h, /しっかり（水・日）<\/div><ol><li>両手スイング<\/li><\/ol>.*上半身（日曜）<\/div><ol><li>ハンマーカール/);
   assert.doesNotMatch(app.trainSec(training, '2026-10-31'), /自宅ケトルベル/);   // kb の無い枠には出さない
   assert.match(app.trainSec(training, '2026-10-29'), /今日は休み/);
 });
@@ -42,6 +45,13 @@ test('ランが「なし」の日はランのチェックを出さない', () =>
   const h = app.trainSec(training, '2026-10-31');
   assert.doesNotMatch(h, /train:2026-10-31:run/);
   assert.match(h, /train:2026-10-31:gym/);
+});
+
+test('ケトルベルのある日はチェック項目に入り、未完了の数に数える', () => {
+  assert.deepEqual(norm(app.trainIds(training, '2026-10-28')), ['train:2026-10-28:run', 'train:2026-10-28:gym', 'train:2026-10-28:kb']);
+  assert.deepEqual(norm(app.trainIds(training, '2026-10-31')), ['train:2026-10-31:gym']);
+  assert.equal(app.trainLeft({ training }, { 'train:2026-10-28:kb': true }, '2026-10-28'), 2);
+  assert.equal(app.doneBody(['train:2026-10-28:kb']), '');   // タスクハブへは送らない
 });
 
 test('ラン・筋トレのチェックはタスクハブへ送らない', () => {
@@ -60,7 +70,7 @@ test('今週の運動は月〜日の表（ラン・筋トレ・ケトルベル�
   assert.match(h, /<td>火<\/td><td>朝ラン<\/td><td>胸＋三頭<\/td><td><\/td>/);   // 短い名前が無い版はそのまま
   assert.equal((h.match(/オフ（手術日）/g) || []).length, 4);   // この fixture は火・水・土だけ（月・木・金・日が休み）
   assert.match(h, /軽め（火・金・土）<\/b><ul><li>片脚RDL 左右3×8/);
-  assert.doesNotMatch(app.weekPlanSec(training, '2026-10-28'), /ケトルベルのメニュー/);
+  assert.doesNotMatch(app.weekPlanSec({ ...training, kbMenus: undefined }, '2026-10-28'), /ケトルベルのメニュー/);   // 古いデータ（kbMenus無し）
 });
 
 test('抽出スクリプト：WEEK_PLAN と DAY_MENUS を読める', () => {

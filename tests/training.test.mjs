@@ -10,7 +10,7 @@ const app = loadApp({ today: '2026-10-28T09:00:00+09:00' });
 const training = {
   plan: [
     { days: [2], key: 'tue', label: '火', focus: '胸＋三頭', run: '朝ラン', leg: 'B', note: '' },
-    { days: [3], key: 'wed', label: '水', focus: '背中＋二頭', run: 'ロング走（朝）', leg: null, note: '脚なし' },
+    { days: [3], key: 'wed', label: '水', focus: '背中＋二頭', run: 'ロング走（朝）', leg: null, kb: 'しっかり（スイング中心）', note: '脚なし' },
     { days: [6], key: 'sat', label: '土', focus: '胸と背中', run: 'なし（朝から仕事）', leg: 'C', note: '' },
   ],
   menus: { '1': { wed: { must: ['フロントプル', 'シュラッグ'], optional: ['ハンマーカール'] } }, '2': {} },
@@ -33,6 +33,8 @@ test('今日の種目とランが出る・休みの日は散歩', () => {
   assert.match(h, /フロントプル/);
   assert.match(h, /脚なし/);
   assert.match(h, /明日（木）: 休み/);
+  assert.match(h, /🔔 自宅ケトルベル: しっかり（スイング中心）（ランの日はランの後）/);
+  assert.doesNotMatch(app.trainSec(training, '2026-10-31'), /自宅ケトルベル/);   // kb の無い枠には出さない
   assert.match(app.trainSec(training, '2026-10-29'), /今日は休み/);
 });
 

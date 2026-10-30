@@ -35,6 +35,8 @@ test('今日の種目とランが出る・休みの日は散歩', () => {
   assert.match(h, /脚なし/);
   assert.match(h, /明日（木）: 休み/);
   assert.match(h, /data-id="train:2026-10-28:kb"/);
+  // 並びはラン → ケトルベル → 筋トレ
+  assert.ok(h.indexOf(':run"') < h.indexOf(':kb"') && h.indexOf(':kb"') < h.indexOf(':gym"'));
   assert.match(h, /🔔 <b>自宅ケトルベル（しっかり）<\/b>/);
   assert.match(h, /しっかり（水・日）<\/div><ol><li>両手スイング<\/li><\/ol>.*上半身（日曜）<\/div><ol><li>ハンマーカール/);
   assert.doesNotMatch(app.trainSec(training, '2026-10-31'), /自宅ケトルベル/);   // kb の無い枠には出さない
@@ -48,7 +50,7 @@ test('ランが「なし」の日はランのチェックを出さない', () =>
 });
 
 test('ケトルベルのある日はチェック項目に入り、未完了の数に数える', () => {
-  assert.deepEqual(norm(app.trainIds(training, '2026-10-28')), ['train:2026-10-28:run', 'train:2026-10-28:gym', 'train:2026-10-28:kb']);
+  assert.deepEqual(norm(app.trainIds(training, '2026-10-28')), ['train:2026-10-28:run', 'train:2026-10-28:kb', 'train:2026-10-28:gym']);
   assert.deepEqual(norm(app.trainIds(training, '2026-10-31')), ['train:2026-10-31:gym']);
   assert.equal(app.trainLeft({ training }, { 'train:2026-10-28:kb': true }, '2026-10-28'), 2);
   assert.equal(app.doneBody(['train:2026-10-28:kb']), '');   // タスクハブへは送らない

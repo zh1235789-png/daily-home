@@ -19,4 +19,6 @@ const plan = literal('WEEK_PLAN', '];');
 const menus = literal('DAY_MENUS', '};');
 // 自宅ケトルベルのメニュー（2026-10-30〜。無い版のコーチでも動くように任意）
 const kbMenus = html.includes('const KB_MENUS = ') ? literal('KB_MENUS', '};') : null;
-process.stdout.write(JSON.stringify({ plan, menus, kbMenus }));
+// 月・木（手術日）の朝メニュー（2026-11-01〜。無い版のコーチでも動くように任意）
+const offDay = html.includes('const OFF_DAY_PLAN = ') ? literal('OFF_DAY_PLAN', '};') : null;
+process.stdout.write(JSON.stringify({ plan, menus, kbMenus, offDay }));

@@ -98,3 +98,23 @@ test('抽出スクリプト：本物の筋トレAIコーチを読める（予定
   assert.ok(out.menus['1'] && out.menus['2']);
   if (out.kbMenus) Object.values(out.kbMenus).forEach((m) => { assert.ok(m.label && Array.isArray(m.items)); });
 });
+
+test('月・木（手術日）はコーチの OFF_DAY_PLAN から朝のウォーキングと体幹メニューを出す（2026-11-01）', () => {
+  const t = {
+    ...training,
+    kbMenus: { ...training.kbMenus, core: { label: '体幹・瞬発（月・木の朝）', items: ['片手ハイプル 左右5×3', '体幹タバタ'] } },
+    offDay: { days: [1, 4], key: 'off', run: '朝ウォーキング20〜30分', runShort: '朝ウォーキング', gymShort: 'オフ（手術日）', kbShort: '体幹・瞬発（朝）', kbLevel: 'core', kb: '体幹', note: 'ハムを休ませる' },
+  };
+  assert.equal(norm(app.offDayFor(t, '2026-10-29')).key, 'off');   // 木
+  assert.equal(app.offDayFor(t, '2026-10-28'), null);              // 水（ジムの日）
+  assert.equal(app.offDayFor(training, '2026-10-29'), null);       // offDay の無い古いデータ
+  const h = app.trainSec(t, '2026-10-29');
+  assert.match(h, /今日はジムなし（手術日）/);
+  assert.match(h, /🚶 朝ウォーキング20〜30分/);
+  assert.match(h, /自宅ケトルベル（体幹・瞬発（朝））/);
+  assert.match(h, /<li>片手ハイプル 左右5×3<\/li><li>体幹タバタ<\/li>/);
+  assert.match(h, /data-id="train:2026-10-29:kb"/);
+  assert.match(app.trainSec(t, '2026-10-28'), /明日（木）: ジムなし（手術日）・朝ウォーキング＋ケトルベル体幹/);
+  const w = app.weekPlanSec(t, '2026-10-28');
+  assert.match(w, /<td>月<\/td><td class="off">朝ウォーキング<\/td><td class="off">オフ（手術日）<\/td><td>体幹・瞬発（朝）<\/td>/);
+});

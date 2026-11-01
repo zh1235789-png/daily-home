@@ -551,7 +551,12 @@ function weekPlanSec(training, today) {
   for (let i = 0; i < 7; i++) {
     const iso = addDays(mon, i);
     const slot = trainingFor(training, iso);
+    const off = offDayFor(training, iso);
     const cls = iso === today ? ' class="today"' : '';
+    if (!slot && off) {
+      rows += '<tr' + cls + '><td>' + wd(iso) + '</td><td class="off">' + esc(off.runShort || '散歩') + '</td><td class="off">' + esc(off.gymShort || 'オフ（手術日）') + '</td><td>' + esc(off.kbShort || '') + '</td></tr>';
+      continue;
+    }
     rows += slot
       ? '<tr' + cls + '><td>' + wd(iso) + '</td><td>' + esc(slot.runShort || slot.run.replace(/（.*）/, '')) + '</td><td>' + esc(slot.gymShort || slot.focus) + '</td><td>' + esc(slot.kbShort || '') + '</td></tr>'
       : '<tr' + cls + '><td>' + wd(iso) + '</td><td class="off">散歩</td><td class="off">オフ（手術日）</td><td class="off">—</td></tr>';
@@ -657,6 +662,12 @@ function trainingFor(training, iso) {
   const slot = ((training && training.plan) || []).filter(p => (p.days || []).indexOf(dow) >= 0)[0];
   return slot || null;
 }
+// 月・木（手術日）の朝メニュー（コーチの OFF_DAY_PLAN、2026-11-01〜）。無い日・古いデータは null（純粋関数）
+function offDayFor(training, iso) {
+  const o = training && training.offDay;
+  if (!o || trainingFor(training, iso)) return null;
+  return (o.days || []).indexOf(new Date(iso + 'T00:00:00Z').getUTCDay()) >= 0 ? o : null;
+}
 const GYM_LABEL = { '1': '志村坂上', '2': '本郷' };
 function legText(leg) {
   if (leg === null || leg === undefined) return '脚なし';
@@ -672,7 +683,18 @@ function trainSec(training, today) {
   const slot = trainingFor(training, today);
   const next = trainingFor(training, addDays(today, 1));
   const tmr = '<p class="sub" style="margin:8px 0 0">明日（' + wd(addDays(today, 1)) + '）: ' +
-    (next ? esc(next.focus) + '・' + esc(legText(next.leg).replace(/（.*）/, '')) + ' / ' + esc(next.run.replace(/（.*）/, '')) : '休み（手術日・散歩のみ）') + '</p>';
+    (next ? esc(next.focus) + '・' + esc(legText(next.leg).replace(/（.*）/, '')) + ' / ' + esc(next.run.replace(/（.*）/, ''))
+      : offDayFor(training, addDays(today, 1)) ? 'ジムなし（手術日）・' + esc(offDayFor(training, addDays(today, 1)).runShort || '朝ウォーキング') + '＋ケトルベル体幹'
+      : '休み（手術日・散歩のみ）') + '</p>';
+  const off = offDayFor(training, today);
+  if (!slot && off) {
+    const kbm = (training.kbMenus || {})[off.kbLevel];
+    let kb = kbm ? '<ol>' + kbm.items.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>' : '<div class="sub">' + esc(off.kb || '') + '</div>';
+    if (off.note) kb += '<div class="tags"><span>※ ' + esc(off.note) + '</span></div>';
+    const ul = '<ul>' + trainLi('train:' + today + ':walk', '🚶 ' + esc(off.run || '朝ウォーキング')) +
+      trainLi('train:' + today + ':kb', '🔔 <b>自宅ケトルベル（' + esc(off.kbShort || '体幹') + '）</b>', kb) + '</ul>';
+    return sec('🏃 ラン・筋トレ', null, '<p class="sub" style="margin:0 0 4px">今日はジムなし（手術日）</p>' + ul + tmr, 'train');
+  }
   if (!slot) return sec('🏃 ラン・筋トレ', null, '<p class="empty">今日は休み（手術日）。散歩だけ</p>' + tmr, 'train');
   const m = ((training.menus || {})[S.gym] || {})[slot.key];
   const seg = '<span class="seg">' + ['1', '2'].map(g => '<button type="button" data-act="gym" data-gym="' + g + '" class="' + (S.gym === g ? '' : 'ghost') + '" aria-pressed="' + (S.gym === g) + '">' + GYM_LABEL[g] + '</button>').join('') + '</span>';

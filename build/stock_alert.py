@@ -229,7 +229,9 @@ def check_vix(today, alerts):
     hit, notified = vix_evaluate(vix["last"], vst.get("notified"))
     vix |= {"level": vix_level(vix["last"]), "base": VIX_BASE, "step": VIX_STEP, "buy": VIX_BUY,
             "alerted": vst.get("alerted")}
-    if hit is not None and "--no-notify" not in sys.argv:
+    if "--no-notify" in sys.argv:
+        return vix  # 確認用の実行では状態を進めない（本番で知らせ損ねないように）
+    if hit is not None:
         soxl = next((a for a in alerts if a["ticker"] == "SOXL"), None)
         try:
             notify_reminder(*vix_message(vix, soxl))

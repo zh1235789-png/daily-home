@@ -2,7 +2,7 @@
 import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from stock_alert import evaluate, message, universe
+from stock_alert import evaluate, message, universe, vix_evaluate, vix_level, vix_message
 
 LISTS = {2022: "AMZN GOOG INTC KRUS COST", 2025: "GOOG OKLO CGC MSTR", 2026: "COIN"}
 UNI = universe(LISTS, dame={"MSTR"}, avoid={"CGC": "避ける"})
@@ -94,6 +94,39 @@ class Evaluate(unittest.TestCase):
         title, body = message(alerts, notify)
         self.assertIn("ほか1件", title)
         self.assertIn("S&P500（VOO） 高値から-35.0%（指数連動・基準10%）", body)
+
+
+class Vix(unittest.TestCase):
+    def test_level(self):
+        self.assertIsNone(vix_level(19.99))
+        self.assertEqual([vix_level(v) for v in (20, 24.9, 25, 29.99, 30, 41)], [20, 20, 25, 25, 30, 40])
+
+    def test_5刻みで上がるたびに1回ずつ(self):
+        n, out = None, []
+        for v in (18, 20.5, 22, 25.1, 24, 26, 30.2, 33, 18.5):
+            hit, n = vix_evaluate(v, n)
+            out.append(hit)
+        self.assertEqual(out, [None, 20, None, 25, None, None, 30, None, None])
+
+    def test_飛び越えたら上の段階だけ(self):
+        self.assertEqual(vix_evaluate(32, None), (30, 30))
+        self.assertEqual(vix_evaluate(36, 20), (35, 35))
+
+    def test_1段以上戻ったら知らせ直す(self):
+        self.assertEqual(vix_evaluate(26, 30), (None, 30))   # 26→31 では再通知しない
+        self.assertEqual(vix_evaluate(24, 30), (None, 25))   # 25未満に戻った
+        self.assertEqual(vix_evaluate(30.5, 25), (30, 30))   # また30超えで再通知
+        self.assertEqual(vix_evaluate(14, 30), (None, None))  # 20を大きく割ったら全部解除
+        self.assertEqual(vix_evaluate(17, 20), (None, 20))   # 15以上なら20は通知済みのまま
+
+    def test_message(self):
+        t, b = vix_message({"last": 31.2, "high": 35.0, "date": "2026-11-02", "level": 30.0},
+                           {"last": 60.5, "dd": -55.1})
+        self.assertIn("VIX 30超え（終値31.2）：SOXL購入検討ライン", t)
+        self.assertIn("SOXL 終値60.5（52週高値から-55.1%）", b)
+        t, b = vix_message({"last": 21.0, "high": 23.0, "date": "2026-11-02", "level": 20.0})
+        self.assertTrue(t.startswith("⚠️ VIX 20超え"))
+        self.assertIn("30を超えたらSOXL", b)
 
 
 if __name__ == "__main__":

@@ -320,7 +320,9 @@ def load_stocks(path):
     if not isinstance(data, dict) or not isinstance(data.get("alerts"), list):
         return None
     alerts = [a for a in data["alerts"] if isinstance(a, dict) and a.get("ticker") and isinstance(a.get("dd"), (int, float))]
-    return {k: data.get(k) for k in ("updated", "asof", "watching", "failed", "rules")} | {"alerts": alerts}
+    vix = data.get("vix")
+    vix = vix if isinstance(vix, dict) and isinstance(vix.get("last"), (int, float)) else None
+    return {k: data.get(k) for k in ("updated", "asof", "watching", "failed", "rules")} | {"alerts": alerts, "vix": vix}
 
 
 def load_picks(path):

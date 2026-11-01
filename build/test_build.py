@@ -98,6 +98,11 @@ class Stocks(unittest.TestCase):
             s = load_stocks(p)
             self.assertEqual([a["ticker"] for a in s["alerts"]], ["GOOGL"])
             self.assertEqual(s["asof"], "2026-10-28")
+            self.assertIsNone(s["vix"])
+            p.write_text('{"alerts": [], "vix": {"last": 21.5, "date": "2026-10-31"}}')
+            self.assertEqual(load_stocks(p)["vix"]["last"], 21.5)
+            p.write_text('{"alerts": [], "vix": {"last": "x"}}')
+            self.assertIsNone(load_stocks(p)["vix"])
 
     def test_picks(self):
         with tempfile.TemporaryDirectory() as d:

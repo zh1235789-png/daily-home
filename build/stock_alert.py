@@ -10,6 +10,7 @@
   3倍レバレッジ（SOXL）                … 30% 以上（NVDA は強い会社）
 その後は固定の段階で知らせ直す（指数 15・20%…／レバレッジ・Hanako30 40・50%…／強い会社 30・40%…）。
 ダメ株トップ10と、花子が避けるべきとした銘柄は対象外。
+VIX（恐怖指数）は終値が20を超えたら5刻み（20・25・30…）で別に知らせる。30以上はSOXLの購入検討ライン（2026-11-01 ユーザー指示）。
 銘柄リストは ~/bin/hanako30_drawdown.py の LISTS / DAME_SET / AVOID を使う（新しい年はそちらに足す）。
 
     python3 build/stock_alert.py              # 取得→stocks.json→新規分を通知
@@ -54,6 +55,10 @@ REARM = 3.0     # 基準より3ポイント戻したら解除（基準付近の�
 #   指数 10→15→20%、レバレッジ 30→40→50%、強い会社 20→30→40%、Hanako30 30→40→50%
 STEP = {"index": 5.0, "lev": 10.0, "strong": 10.0, "other": 10.0}
 ALIASES = {"GOOG": "GOOGL"}  # 同じ会社の別クラスは1つにまとめる
+
+# VIX（恐怖指数）: 終値が20を超えたら5刻みで通知。30以上は SOXL の購入検討ライン（2026-11-01 ユーザー指示）
+VIX_STATE = CONF / "vix_state.json"
+VIX_BASE, VIX_STEP, VIX_BUY = 20.0, 5.0, 30.0
 
 
 def tier(drop, th, step):
@@ -158,11 +163,83 @@ end run'''
                    capture_output=True, timeout=60, check=True)
 
 
+def vix_level(v):
+    """VIX がどの段階にいるか（20・25・30…）。20未満は None（純粋関数）"""
+    if v < VIX_BASE:
+        return None
+    return VIX_BASE + VIX_STEP * int((v - VIX_BASE) / VIX_STEP + 1e-9)
+
+
+def vix_evaluate(v, notified):
+    """(今回知らせる段階 or None, 次回用の通知済み段階) を返す（純粋関数）。
+
+    前回知らせた段階より上に入ったら知らせる。1段（5ポイント）以上下に戻ったら通知済みを下げ、
+    次にまた上がったときに知らせ直す（例: 30で通知→24に戻る→30に再上昇で再通知、26→31は通知しない）。
+    """
+    lv = vix_level(v)
+    if lv is not None and (notified is None or lv > notified):
+        return lv, lv
+    while notified is not None and v < notified - VIX_STEP:
+        notified -= VIX_STEP
+        if notified < VIX_BASE:
+            notified = None
+    return None, notified
+
+
+def vix_message(vix, soxl=None):
+    """VIX 通知の件名と本文（純粋関数）。soxl は下落アラートの SOXL 行（無ければ None）"""
+    lv = vix["level"]
+    buy = lv >= VIX_BUY
+    title = ("🔥" if buy else "⚠️") + f" VIX {lv:.0f}超え（終値{vix['last']:.1f}）" + ("：SOXL購入検討ライン" if buy else "")
+    body = f"VIX 終値 {vix['last']:.2f}（{vix['date']}）・場中高値 {vix['high']:.2f}"
+    if soxl:
+        body += f"\nSOXL 終値{soxl['last']:,}（52週高値から{soxl['dd']:+.1f}%）"
+    body += ("\n\n30超えはSOXLを検討すると決めたライン。3倍レバレッジは長く持つほど目減りするので、"
+             "買う量と売る条件を先に決めてから。" if buy else f"\n\n{VIX_BUY:.0f}を超えたらSOXLの購入検討ライン。")
+    return title, body
+
+
+def vix_quote():
+    import urllib.request
+    url = "https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?range=5d&interval=1d"
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    d = json.load(urllib.request.urlopen(req, timeout=15))["chart"]["result"][0]
+    q = d["indicators"]["quote"][0]
+    rows = [(ts, c, h) for ts, c, h in zip(d["timestamp"], q["close"], q["high"]) if c]
+    ts, c, h = rows[-1]
+    return {"last": round(c, 2), "high": round(h or c, 2),
+            "date": dt.datetime.fromtimestamp(ts, dt.timezone.utc).date().isoformat()}
+
+
 def load_json(p, default):
     try:
         return json.loads(p.read_text())
     except (OSError, ValueError):
         return default
+
+
+def check_vix(today, alerts):
+    """VIX を取得し、新しい段階に入ったらリマインダーで知らせる。stocks.json 用の dict（取れなければ None）"""
+    vst = load_json(VIX_STATE, {})
+    try:
+        vix = vix_quote()
+    except Exception as e:  # noqa: BLE001 VIX が取れなくても下落アラートは続ける
+        print(f"VIX: 取得失敗 {e}", file=sys.stderr)
+        return None
+    hit, notified = vix_evaluate(vix["last"], vst.get("notified"))
+    vix |= {"level": vix_level(vix["last"]), "base": VIX_BASE, "step": VIX_STEP, "buy": VIX_BUY,
+            "alerted": vst.get("alerted")}
+    if hit is not None and "--no-notify" not in sys.argv:
+        soxl = next((a for a in alerts if a["ticker"] == "SOXL"), None)
+        try:
+            notify_reminder(*vix_message(vix, soxl))
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"VIX 通知に失敗: {e}", file=sys.stderr)
+            return vix  # 状態を進めず、次回また知らせる
+    if hit is not None:
+        vix["alerted"] = today
+    VIX_STATE.write_text(json.dumps({"notified": notified, "alerted": vix["alerted"]}))
+    return vix
 
 
 def main():
@@ -184,12 +261,13 @@ def main():
         sys.exit(1)
     state = load_json(STATE, {})
     alerts, notify, new_state = evaluate(quotes, uni, state, today, failed)
+    vix = check_vix(today, alerts)
     OUT.write_text(json.dumps({
         "updated": now.isoformat(timespec="minutes"),
         "asof": max(q["date"] for q in quotes.values()),
         "watching": len(quotes), "failed": failed,
         "rules": [{"group": k, "label": v[0], "threshold": v[1]} for k, v in GROUPS.items()],
-        "alerts": alerts,
+        "alerts": alerts, "vix": vix,
     }, ensure_ascii=False, indent=1))
     if notify and "--no-notify" not in sys.argv:
         try:
@@ -203,6 +281,8 @@ def main():
                     new_state.pop(t, None)
             print(f"リマインダー通知に失敗: {e}", file=sys.stderr)
     STATE.write_text(json.dumps(new_state, ensure_ascii=False, indent=1))
+    if vix:
+        print(f"VIX: 終値{vix['last']}（段階{vix['level']}）")
     print(f"株価アラート: 監視{len(quotes)}件・基準超え{len(alerts)}件・新規通知{len(notify)}件"
           + (f"・取得失敗{len(failed)}件" if failed else ""))
 

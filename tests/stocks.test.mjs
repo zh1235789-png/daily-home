@@ -91,3 +91,22 @@ test('買い候補が空でも出せる・投資タブの先頭に置く', () =>
   const h = app.investTab({ picks, stocks }, '2026-10-28');
   assert.ok(h.indexOf('💡 買い候補') < h.indexOf('📉 下落アラート'));
 });
+
+test('VIX: 段階ごとの表示・新規の数に入る', () => {
+  const calm = app.stockSec({ ...stocks, alerts: [], vix: { last: 19.42, high: 23.93, date: '2026-10-31', buy: 30, base: 20 } }, '2026-11-01');
+  assert.match(calm, /VIX<\/span>/);
+  assert.match(calm, /19\.42/);
+  assert.match(calm, /落ち着いている/);
+  assert.match(calm, /場中高値 23\.93/);
+  assert.match(calm, /📉 下落アラート <span class="n">0<\/span>/);
+  const warn = app.stockSec({ ...stocks, alerts: [], vix: { last: 26.1, date: '2026-10-31', alerted: '2026-11-01' } }, '2026-11-01');
+  assert.match(warn, /vix warn new/);
+  assert.match(warn, /20超え（30でSOXL検討）/);
+  assert.match(warn, /（新規） <span class="n">1<\/span>/);
+  const buy = app.stockSec({ ...stocks, alerts: [], vix: { last: 31.5, date: '2026-10-31', alerted: '2026-10-20' } }, '2026-11-01');
+  assert.match(buy, /vix buy"/);
+  assert.match(buy, /SOXL購入検討ライン/);
+  assert.equal(app.vixRow(null, '2026-11-01'), '');
+  assert.equal(app.vixRow({ last: 'x' }, '2026-11-01'), '');
+  assert.ok(app.stockSec(stocks, '2026-10-28').indexOf('VIX') < 0);  // 古い stocks.json（vix無し）でも動く
+});

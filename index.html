@@ -831,7 +831,7 @@ async function requestRefresh() {
     R.msg = '⚠️ GitHubにつながりません（通信を確認）'; R.err = true; render(); return;
   }
   if (res.status === 401 || res.status === 403 || res.status === 404) {
-    R.msg = '⚠️ トークンが使えません（期限切れか権限不足）。⚙から設定し直してください'; R.err = true; render(); return;
+    R.msg = '⚠️ トークンが使えません（' + res.status + '：' + (res.status === 401 ? '期限切れか削除済み' : '権限不足か対象リポジトリ外') + '）。⚙から作り直して貼ってください'; R.err = true; render(); return;
   }
   if (!res.ok) { R.msg = '⚠️ GitHubでエラー（' + res.status + '）'; R.err = true; render(); return; }
   try { R.req = (await res.json()).number; } catch (e) { R.req = 0; }

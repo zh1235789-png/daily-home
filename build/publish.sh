@@ -2,9 +2,12 @@
 # データを作り直して data.enc.json だけを push する（スケジュールタスクから呼ぶ）
 set -euo pipefail
 cd "$(dirname "$0")/.."
-python3 build/build.py
+# 暗号化に使う cryptography は macOS 標準の Python にだけ入っている。
+# PATH 先頭の Homebrew python3（yt-dlp の依存で入る）には無いので、標準の方を名指しする。
+PY=/usr/bin/python3
+"$PY" build/build.py
 # YouTube 要約の投資メモを花子投資スキルのノートへ追記（失敗しても公開は続ける）
-python3 build/hanako_log.py || echo "花子の発言ログの追記に失敗（次回の公開で再試行）"
+"$PY" build/hanako_log.py || echo "花子の発言ログの追記に失敗（次回の公開で再試行）"
 git add data.enc.json
 if git diff --cached --quiet; then
   # 前回 commit 後の push が失敗していたら、データだけのコミットに限って押し直す

@@ -2,7 +2,7 @@
 import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
-from stock_alert import evaluate, message, universe, vix_evaluate, vix_level, vix_message
+from stock_alert import evaluate, message, nav_quote, universe, vix_evaluate, vix_level, vix_message
 
 LISTS = {2022: "AMZN GOOG INTC KRUS COST", 2025: "GOOG OKLO CGC MSTR", 2026: "COIN"}
 UNI = universe(LISTS, dame={"MSTR"}, avoid={"CGC": "避ける"})
@@ -26,6 +26,27 @@ class Universe(unittest.TestCase):
         self.assertNotIn("MSTR", UNI)                     # ダメ株は対象外
         self.assertNotIn("CGC", UNI)                      # 避ける銘柄も対象外
         self.assertNotIn("META", universe(LISTS, dame={"META"}, avoid={}))  # GAFAMでもダメ株なら外す
+
+
+class Fund(unittest.TestCase):
+    CSV = ("年月日,基準価額(円),純資産総額（百万円）,分配金,決算期\r\n"
+           "2025年10月01日,50000,1,,\r\n"          # 1年より前の高値は使わない
+           "2025年11月10日,30000,1,,\r\n"
+           "2026年10月06日,41000,1,,\r\n"
+           "2026年11月06日,39080,1,,\r\n")
+
+    def test_nav_quote(self):
+        self.assertEqual(nav_quote(self.CSV), {"last": 39080, "hi": 41000, "hi_date": "2026-10-06",
+                                               "dd": -4.7, "date": "2026-11-06"})
+
+    def test_nav_quote_empty(self):
+        with self.assertRaises(ValueError):
+            nav_quote("年月日,基準価額(円)\r\n")
+
+    def test_fund_is_index(self):
+        self.assertEqual(UNI["SBI・V・S&P500"], ("index", []))
+        alerts, notify, _ = evaluate({"SBI・V・S&P500": q(-10.0)}, UNI, {}, "2026-11-07")
+        self.assertEqual((notify, alerts[0]["name"]), (["SBI・V・S&P500"], "SBI・V・S&P500（円建て）"))
 
 
 class Evaluate(unittest.TestCase):

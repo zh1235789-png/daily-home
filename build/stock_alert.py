@@ -4,7 +4,7 @@
 52週高値（終値）からの下落率が基準を超えた銘柄を stocks.json に書き、
 新しく基準を超えた銘柄があれば iPhone のリマインダー「株価アラート」で知らせる。
 
-  指数連動（VOO・QQQ・VT）           … 10% 以上
+  指数連動（VOO・QQQ・VT・SBI・V・S&P500） … 10% 以上（投信は円建ての基準価額で見る）
   強い会社（GAFAM＋殿堂入りのうち大型で安定した会社） … 20% 以上
   その他の歴代Hanako30                 … 30% 以上
   3倍レバレッジ（SOXL）                … 30% 以上（NVDA は強い会社）
@@ -34,7 +34,10 @@ REMINDER_LIST = "株価アラート"
 
 INDEX = {"VOO": "S&P500（VOO）", "QQQ": "ナスダック100（QQQ）", "VT": "全世界株（VT）"}
 LEVERAGED = {"SOXL": "半導体3倍（SOXL）"}
-NAMES = {**INDEX, **LEVERAGED}
+# 投資信託（円建て）。基準価額は投資信託協会の投信総合検索ライブラリーから取る（2026-11-07 ユーザー指示）。
+# VOO はドル建てなので、円高で下がった分はこちらでしか分からない。 {表示名: (ISIN, 協会コード, 正式名)}
+FUNDS = {"SBI・V・S&P500": ("JP90C000H1T1", "89311199", "SBI・V・S&P500（円建て）")}
+NAMES = {**INDEX, **LEVERAGED, **{t: f[2] for t, f in FUNDS.items()}}
 GAFAM = ["GOOGL", "AAPL", "META", "AMZN", "MSFT"]
 # Hanako30 に無くても強い会社として見るもの（2026-10-28 ユーザー指示）
 EXTRA_STRONG = ["NVDA"]
@@ -79,7 +82,7 @@ def universe(lists, dame, avoid):
     for y, s in lists.items():
         for t in s.split():
             years.setdefault(ALIASES.get(t, t), []).append(y)
-    out = {t: ("index", []) for t in INDEX}
+    out = {t: ("index", []) for t in [*INDEX, *FUNDS]}
     out.update({t: ("lev", []) for t in LEVERAGED})
     hof = set(STRONG)
     for t in GAFAM + EXTRA_STRONG:
@@ -92,8 +95,41 @@ def universe(lists, dame, avoid):
     return out
 
 
+def nav_quote(text):
+    """投信総合検索ライブラリーの基準価額CSV（文字列）から直近1年の終値と高値を出す（純粋関数）"""
+    import csv
+    import io
+    rows = []
+    for r in csv.reader(io.StringIO(text)):
+        try:
+            d = dt.datetime.strptime(r[0], "%Y年%m月%d日").date()
+            rows.append((d, float(r[1])))
+        except (ValueError, IndexError):
+            continue  # 見出し行など
+    if not rows:
+        raise ValueError("基準価額がありません")
+    rows.sort()
+    last_d, last = rows[-1]
+    pairs = [x for x in rows if x[0] > last_d - dt.timedelta(days=365)]
+    hi_d, hi = max(pairs, key=lambda p: p[1])
+    return {"last": round(last), "hi": round(hi), "hi_date": hi_d.isoformat(),
+            "dd": round((last / hi - 1) * 100, 1), "date": last_d.isoformat()}
+
+
+def fund_quote(t):
+    import urllib.request
+    isin, code, _ = FUNDS[t]
+    url = ("https://toushin-lib.fwg.ne.jp/FdsWeb/FDST030000/csv-file-download"
+           f"?isinCd={isin}&associFundCd={code}")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    raw = urllib.request.urlopen(req, timeout=30).read()
+    return nav_quote(raw.decode("cp932"))
+
+
 def quote(t):
     import urllib.request
+    if t in FUNDS:
+        return fund_quote(t)
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{t}?range=1y&interval=1d"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     d = json.load(urllib.request.urlopen(req, timeout=15))["chart"]["result"][0]

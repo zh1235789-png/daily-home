@@ -12,6 +12,8 @@ test('英語ルーティン: 曜日に関係なく毎日5つ、OETアプリは�
   assert.equal(rt.map(r => r.name).join('|'), ['Abceed 瞬間英作文', 'Langaku', 'OET Reading', 'OET Speaking', 'OET Listening'].join('|'));
   assert.equal(rt.find(r => r.name === 'OET Reading').url, 'https://zh1235789-png.github.io/oet-reading-commute/');
   assert.equal(rt.find(r => r.name === 'Langaku').url, '');
+  assert.equal(rt[0].note, '通勤の行き');
+  assert.equal(rt[1].note, '通勤の帰り');
 });
 
 test('英語タブのバッジ: 今日のOETとルーティンの未チェック数。古いOETノートは数えない', () => {

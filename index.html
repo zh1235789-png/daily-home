@@ -477,19 +477,16 @@ function tabNav(tab, d, today) {
   return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('eng', '🇬🇧', '英語', engLeft(d, S.checks, today)) + btn('health', '🏃', '健康', trainLeft(d, S.checks, today)) + btn('invest', '📈', '投資', fresh) + '</nav>';
 }
 // ---------- 英語タブ ----------
-// 毎日の英語ルーティン。Speak は月・木・土日（土日はどちらか1回）。チェックはこの端末だけに残る（純粋関数）
+// 毎日の英語ルーティン（毎日同じ5つ）。URL があるものはタップで開く。チェックはこの端末だけに残る（純粋関数）
 const ENG_DAILY = [
-  ['duo', 'DUO 例文英訳', '5文'],
-  ['shunkan', '瞬間英作文', '30問'],
-  ['shadow', 'DUO シャドーイング', '3〜4セクション（聞く→見て重ねる→見ずに重ねる）'],
-  ['langaku', 'Langaku', '漫画を英語で'],
+  ['shunkan', 'Abceed 瞬間英作文', '30問', ''],
+  ['langaku', 'Langaku', '漫画を英語で', ''],
+  ['reading', 'OET Reading', '通勤ドリル', 'oet-reading-commute'],
+  ['speaking', 'OET Speaking', 'カード', 'oet-flashcards'],
+  ['listening', 'OET Listening', '通勤リスニング', 'oet-listening-commute'],
 ];
 function engRoutine(today) {
-  const dow = new Date(today + 'T00:00:00Z').getUTCDay();
-  const list = ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
-  if (dow === 1 || dow === 4) list.push({ id: 'eng:' + today + ':speak', name: 'Speak（AI英会話）', note: '10分・シャドーイングの後に' });
-  if (dow === 0 || dow === 6) list.push({ id: 'eng:' + today + ':speak', name: 'Speak（AI英会話）', note: '10分・土日どちらか1回' });
-  return list;
+  return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2], url: r[3] ? 'https://zh1235789-png.github.io/' + r[3] + '/' : '' }));
 }
 // 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
 function engLeft(d, checks, today) {
@@ -498,6 +495,7 @@ function engLeft(d, checks, today) {
 }
 const ENG_APPS = [
   ['Listening エラーログ', 'oet-listening-errorlog'],
+  ['Listening 通勤リスニング', 'oet-listening-commute'],
   ['Reading 通勤ドリル', 'oet-reading-commute'],
   ['Speaking カード', 'oet-flashcards'],
   ['瞬間英作文', 'shunkan-eisakubun'],
@@ -508,7 +506,7 @@ function engTab(d, today) {
   h += sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, '<ul>' + rt.map(r => {
     const checked = !!S.checks[r.id];
     return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(r.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
-      '<div class="body"><div class="txt"><b>' + esc(r.name) + '</b></div><div class="tags"><span>' + esc(r.note) + '</span></div></div></li>';
+      '<div class="body"><div class="txt"><b>' + (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.name) + ' ↗</a>' : esc(r.name)) + '</b></div><div class="tags"><span>' + esc(r.note) + '</span></div></div></li>';
   }).join('') + '</ul>');
   h += sec('🎯 OET 目標', null, '<p class="lead">受験 <b>2027年1〜2月</b>（未申込）／必要スコア L350・R360・W350・S360</p>');
   h += sec('🔗 英語のアプリ', null, '<div class="tags">' + ENG_APPS.map(a =>

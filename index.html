@@ -481,12 +481,12 @@ function tabNav(tab, d, today) {
 const ENG_DAILY = [
   ['shunkan', 'Abceed 瞬間英作文', '通勤の行き', ''],
   ['langaku', 'Langaku', '通勤の帰り', ''],
-  ['reading', 'OET Reading', '通勤ドリル', 'oet-reading-commute'],
-  ['speaking', 'OET Speaking', 'カード', 'oet-flashcards'],
-  ['listening', 'OET Listening', '通勤リスニング', 'oet-listening-commute'],
+  ['reading', 'OET Reading', '通勤ドリル', 'oet-reading-commute/'],
+  ['speaking', 'OET Speaking', '今日の5フレーズ', 'oet-flashcards/#daily'],
+  ['listening', 'OET Listening', '通勤リスニング', 'oet-listening-commute/'],
 ];
 function engRoutine(today) {
-  return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2], url: r[3] ? 'https://zh1235789-png.github.io/' + r[3] + '/' : '' }));
+  return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2], url: r[3] ? 'https://zh1235789-png.github.io/' + r[3] : '' }));
 }
 // 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
 function engLeft(d, checks, today) {

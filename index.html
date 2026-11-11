@@ -477,40 +477,32 @@ function tabNav(tab, d, today) {
   return '<nav class="tabbar">' + btn('home', '🏠', 'ホーム', 0) + btn('eng', '🇬🇧', '英語', engLeft(d, S.checks, today)) + btn('health', '🏃', '健康', trainLeft(d, S.checks, today)) + btn('invest', '📈', '投資', fresh) + '</nav>';
 }
 // ---------- 英語タブ ----------
-// 毎日の英語ルーティン（毎日同じ5つ）。URL があるものはタップで開く。チェックはこの端末だけに残る（純粋関数）
+// 毎日の英語ルーティン（毎日同じ5つ）。チェックはこの端末だけに残る（純粋関数）
+// アプリへのリンクは置かない：iPhoneではリンクからホーム画面のアプリを開けず、記録が別になるSafari側で開いてしまうため
 const ENG_DAILY = [
-  ['shunkan', 'Abceed 瞬間英作文', '通勤の行き', ''],
-  ['langaku', 'Langaku', '通勤の帰り', ''],
-  ['reading', 'OET Reading', '通勤ドリル', 'oet-reading-commute/'],
-  ['speaking', 'OET Speaking', '今日の5フレーズ', 'oet-flashcards/#daily'],
-  ['listening', 'OET Listening', '通勤リスニング', 'oet-listening-commute/'],
+  ['shunkan', 'Abceed 瞬間英作文', '通勤の行き'],
+  ['langaku', 'Langaku', '通勤の帰り'],
+  ['reading', 'OET Reading', '通勤ドリル'],
+  ['speaking', 'OET Speaking', '今日の5フレーズ'],
+  ['listening', 'OET Listening', '通勤リスニング'],
 ];
 function engRoutine(today) {
-  return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2], url: r[3] ? 'https://zh1235789-png.github.io/' + r[3] : '' }));
+  return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
 }
 // 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
 function engLeft(d, checks, today) {
   const oet = d && d.oet && d.oet.date === today ? (d.oet.menu || []) : [];
   return oet.concat(engRoutine(today)).filter(x => !checks[x.id]).length;
 }
-const ENG_APPS = [
-  ['Listening エラーログ', 'oet-listening-errorlog'],
-  ['Listening 通勤リスニング', 'oet-listening-commute'],
-  ['Reading 通勤ドリル', 'oet-reading-commute'],
-  ['Speaking カード', 'oet-flashcards'],
-  ['瞬間英作文', 'shunkan-eisakubun'],
-];
 function engTab(d, today) {
   let h = d.oet ? oetSec(d.oet, today) : sec('🎧 OET', null, '<p class="empty">今日のOETノートがまだありません（毎朝6:30に作成）</p>');
   const rt = engRoutine(today);
   h += sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, '<ul>' + rt.map(r => {
     const checked = !!S.checks[r.id];
     return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(r.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
-      '<div class="body"><div class="txt"><b>' + (r.url ? '<a href="' + esc(r.url) + '" target="_blank" rel="noopener">' + esc(r.name) + ' ↗</a>' : esc(r.name)) + '</b></div><div class="tags"><span>' + esc(r.note) + '</span></div></div></li>';
+      '<div class="body"><div class="txt"><b>' + esc(r.name) + '</b></div><div class="tags"><span>' + esc(r.note) + '</span></div></div></li>';
   }).join('') + '</ul>');
   h += sec('🎯 OET 目標', null, '<p class="lead">受験 <b>2027年1〜2月</b>（未申込）／必要スコア L350・R360・W350・S360</p>');
-  h += sec('🔗 英語のアプリ', null, '<div class="tags">' + ENG_APPS.map(a =>
-    '<a href="https://zh1235789-png.github.io/' + a[1] + '/" target="_blank" rel="noopener">' + esc(a[0]) + '</a>').join('') + '</div>');
   return h;
 }
 // ---------- 健康タブ ----------

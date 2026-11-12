@@ -506,10 +506,11 @@ function engTab(d, today) {
   return h;
 }
 // ---------- 健康タブ ----------
-// 今日のラン・筋トレのチェック項目の ID（ランが「なし」の日は筋トレだけ。休みの日は空）（純粋関数）
+// 今日のラン・筋トレのチェック項目の ID（ランが「なし」の日は筋トレだけ。月・木はウォーキング＋KB。休みの日は空）（純粋関数）
+// trainSec が描くチェックと必ずそろえる。ここに無い ID のチェックは start() が「消えた項目」として捨てる（2026-11-12 修正）
 function trainIds(training, today) {
   const slot = trainingFor(training, today);
-  if (!slot) return [];
+  if (!slot) return offDayFor(training, today) ? ['train:' + today + ':walk', 'train:' + today + ':kb'] : [];
   return (/^なし/.test(slot.run) ? [] : ['train:' + today + ':run']).concat(slot.kb ? ['train:' + today + ':kb'] : [], ['train:' + today + ':gym']);
 }
 function trainLeft(d, checks, today) {

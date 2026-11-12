@@ -132,3 +132,18 @@ test('月・木（手術日）はコーチの OFF_DAY_PLAN から朝のウォー
   const w = app.weekPlanSec(t, '2026-10-28');
   assert.match(w, /<td>月<\/td><td class="off">朝ウォーキング<\/td><td class="off">オフ（手術日）<\/td><td>体幹・瞬発（朝）<\/td>/);
 });
+
+test('チェックを保存する ID（trainIds）は、画面に出すチェック（trainSec）と曜日を問わず一致する（2026-11-12: 月・木のチェックが開くたびに消えた）', () => {
+  const t = {
+    ...training,
+    kbMenus: { ...training.kbMenus, core: { label: '体幹・瞬発', items: ['体幹タバタ'] } },
+    offDay: { days: [1, 4], key: 'off', run: '朝ウォーキング20〜30分', kbShort: '体幹・瞬発（朝）', kbLevel: 'core', kb: '体幹' },
+  };
+  assert.deepEqual(norm(app.trainIds(t, '2026-11-12')), ['train:2026-11-12:walk', 'train:2026-11-12:kb']);   // 木
+  for (let i = 0; i < 7; i++) {
+    const day = app.addDays('2026-11-09', i);
+    const shown = [...app.trainSec(t, day).matchAll(/data-id="([^"]+)"/g)].map(m => m[1]).sort();
+    assert.deepEqual(norm(app.trainIds(t, day)).slice().sort(), shown, day);
+  }
+  assert.equal(app.trainLeft({ training: t }, { 'train:2026-11-12:walk': '2026-11-12' }, '2026-11-12'), 1);
+});

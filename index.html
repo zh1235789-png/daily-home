@@ -700,7 +700,7 @@ function trainSec(training, today) {
   if (slot.leg !== null && slot.leg !== undefined) gym += '<div class="tags"><span>※ ハムに痛みがある日は脚を外す</span></div>';
   if (slot.kb) {
     const kbm = training.kbMenus || {};
-    const keys = [slot.kbLevel].concat(slot.kbUpper ? ['upper'] : []).filter(k => kbm[k]);
+    const keys = [slot.kbLevel].concat(slot.kbExtra || (slot.kbUpper ? ['upper'] : [])).filter(k => kbm[k]);   // kbExtra は 2026-11-12〜（金・日の朝の腕タバタ）
     let kb = keys.length ? '' : '<div class="sub">' + esc(slot.kb) + '</div>';   // メニューが無い古いデータは説明文だけ
     keys.forEach((k, i) => { kb += '<div class="sub"' + (i ? ' style="margin-top:4px"' : '') + '>' + esc(kbm[k].label) + '</div><ol>' + kbm[k].items.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>'; });
     kb += '<div class="tags"><span>※ ランの日はランの後に。翌朝ハムの張りが残っていたら軽めに</span></div>';

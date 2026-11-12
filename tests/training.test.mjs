@@ -43,6 +43,15 @@ test('今日の種目とランが出る・休みの日は散歩', () => {
   assert.match(app.trainSec(training, '2026-10-29'), /今日は休み/);
 });
 
+test('kbExtra（金・日の朝の腕タバタ）のメニューも並べる（2026-11-12）', () => {
+  const t = { ...training,
+    plan: training.plan.map(p => p.key === 'wed' ? { ...p, kbUpper: undefined, kbExtra: ['armtabata'] } : p),
+    kbMenus: { ...training.kbMenus, armtabata: { label: '腕タバタ（金・日の朝）', items: ['ハンマーカール⇄フレンチプレス'] } } };
+  const h = app.trainSec(t, '2026-10-28');
+  assert.match(h, /しっかり（水・日）<\/div><ol><li>両手スイング<\/li><\/ol>.*腕タバタ（金・日の朝）<\/div><ol><li>ハンマーカール⇄フレンチプレス/);
+  assert.doesNotMatch(h, /上半身（日曜）/);
+});
+
 test('ランが「なし」の日はランのチェックを出さない', () => {
   const h = app.trainSec(training, '2026-10-31');
   assert.doesNotMatch(h, /train:2026-10-31:run/);

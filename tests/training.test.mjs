@@ -117,6 +117,11 @@ test('月・木（手術日）はコーチの OFF_DAY_PLAN から朝のウォー
   assert.equal(norm(app.offDayFor(t, '2026-10-29')).key, 'off');   // 木
   assert.equal(app.offDayFor(t, '2026-10-28'), null);              // 水（ジムの日）
   assert.equal(app.offDayFor(training, '2026-10-29'), null);       // offDay の無い古いデータ
+  // 曜日ごとの上書き（2026-11-12〜。月は体幹タバタだけ）
+  const t2 = { ...t, offDay: { ...t.offDay, byDay: { 1: { kbShort: '体幹タバタ（朝）', kbLevel: 'coretabata' }, 4: {} } } };
+  assert.equal(app.offDayFor(t2, '2026-11-16').kbLevel, 'coretabata');   // 月
+  assert.equal(app.offDayFor(t2, '2026-11-19').kbLevel, 'core');         // 木
+  assert.equal(app.offDayFor(t2, '2026-11-16').run, '朝ウォーキング20〜30分');   // 上書きしない項目は元のまま
   const h = app.trainSec(t, '2026-10-29');
   assert.match(h, /今日はジムなし（手術日）/);
   assert.match(h, /🚶 朝ウォーキング20〜30分/);

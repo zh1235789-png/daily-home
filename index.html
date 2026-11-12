@@ -653,10 +653,14 @@ function trainingFor(training, iso) {
   return slot || null;
 }
 // 月・木（手術日）の朝メニュー（コーチの OFF_DAY_PLAN、2026-11-01〜）。無い日・古いデータは null（純粋関数）
+// 曜日ごとの上書き byDay（2026-11-12〜。月は体幹タバタだけ）があれば重ねる
 function offDayFor(training, iso) {
   const o = training && training.offDay;
   if (!o || trainingFor(training, iso)) return null;
-  return (o.days || []).indexOf(new Date(iso + 'T00:00:00Z').getUTCDay()) >= 0 ? o : null;
+  const dow = new Date(iso + 'T00:00:00Z').getUTCDay();
+  if ((o.days || []).indexOf(dow) < 0) return null;
+  const over = (o.byDay || {})[dow];
+  return over ? Object.assign({}, o, over) : o;
 }
 const GYM_LABEL = { '1': '志村坂上', '2': '本郷' };
 function legText(leg) {
@@ -674,7 +678,7 @@ function trainSec(training, today) {
   const next = trainingFor(training, addDays(today, 1));
   const tmr = '<p class="sub" style="margin:8px 0 0">明日（' + wd(addDays(today, 1)) + '）: ' +
     (next ? esc(next.focus) + '・' + esc(legText(next.leg).replace(/（.*）/, '')) + ' / ' + esc(next.run.replace(/（.*）/, ''))
-      : offDayFor(training, addDays(today, 1)) ? 'ジムなし（手術日）・' + esc(offDayFor(training, addDays(today, 1)).runShort || '朝ウォーキング') + '＋ケトルベル体幹'
+      : offDayFor(training, addDays(today, 1)) ? 'ジムなし（手術日）・' + esc(offDayFor(training, addDays(today, 1)).runShort || '朝ウォーキング') + '＋ケトルベル' + esc(offDayFor(training, addDays(today, 1)).kbShort || '体幹')
       : '休み（手術日・散歩のみ）') + '</p>';
   const off = offDayFor(training, today);
   if (!slot && off) {

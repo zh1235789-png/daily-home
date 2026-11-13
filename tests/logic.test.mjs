@@ -127,6 +127,15 @@ test('完了の依頼の本文はIDだけ（文面や不正な値は入れない
   assert.equal(app.doneBody(['0123456789', 'abcdef0123', 'mail:https://x', '<script>']), 'id:0123456789\nid:abcdef0123');
 });
 
+test('メールの完了は mail:<10桁ID> だけを送る（URL・件名は送らない）', () => {
+  const U = 'https://mail.google.com/mail/#all/thread-f:111';
+  const data = { gmail: { items: [{ url: U, subject: '件名', id: 'a1b2c3d4e5' }, { url: 'https://x', subject: 'IDなし' }] } };
+  assert.equal(app.mailHid(data, 'mail:' + U), 'a1b2c3d4e5');
+  assert.equal(app.mailHid(data, 'mail:https://x'), '');
+  assert.equal(app.mailHid(data, '0123456789'), '');
+  assert.equal(app.doneBody(['0123456789', 'mail:' + U, 'mail:https://x', 'mail:https://nothere'], data), 'id:0123456789\nmail:a1b2c3d4e5');
+});
+
 test('自動作業：今日と昨日の記録だけを出し、要約・ノートへのリンクを表示する', () => {
   const data = { routines: [
     { id: 'r1', date: '2026-10-21', time: '09:12', name: '泌尿器科週次アップデート', headline: '3件: THOR-2続報', lines: [], note: '2026-10-21_泌尿器科週次アップデート', output: '泌尿器科アップデート_2026-10-21' },

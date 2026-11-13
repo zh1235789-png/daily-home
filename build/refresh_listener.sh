@@ -75,9 +75,12 @@ find "$CONF" -maxdepth 1 -name 'stocks-*' -mtime +3 -delete 2>/dev/null
 open_json=$(gh api "repos/$REPO_SLUG/issues?state=open&creator=$OWNER&per_page=30" 2>>"$LOG") || exit 0
 nums() { printf '%s' "$open_json" | jq -r --arg t "$1" '.[] | select(.title == $t) | .number' | grep -E '^[0-9]+$' | tr '\n' ' '; }
 refresh_ids=$(nums refresh)
-# title=done の本文は「id:<10桁の16進>」の行だけ（公開 issue なのでタスクの文面は送らない）
+# title=done の本文は「id:<10桁の16進>」（タスク）と「mail:<10桁の16進>」（メール）の行だけ
+# （公開 issue なのでタスクの文面・メールの件名やスレッド番号は送らない）
 done_ids=$(nums done)
-task_ids=$(printf '%s' "$open_json" | jq -r '.[] | select(.title == "done") | .body // ""' | grep -oE 'id:[0-9a-f]{10}' | cut -c4- | sort -u | tr '\n' ' ')
+done_body=$(printf '%s' "$open_json" | jq -r '.[] | select(.title == "done") | .body // ""')
+task_ids=$(printf '%s\n' "$done_body" | grep -oE '(^|[^a-z])id:[0-9a-f]{10}' | grep -oE '[0-9a-f]{10}$' | sort -u | tr '\n' ' ')
+mail_ids=$(printf '%s\n' "$done_body" | grep -oE 'mail:[0-9a-f]{10}' | cut -c6- | sort -u | tr '\n' ' ')
 ids="$done_ids $refresh_ids"
 [ -z "${ids// /}" ] && exit 0
 
@@ -91,18 +94,30 @@ fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 for n in $ids; do gh api -X PATCH "repos/$REPO_SLUG/issues/$n" -f state=closed -f state_reason=completed >/dev/null 2>>"$LOG"; done
-log "requested: done=[$done_ids] tasks=[$task_ids] refresh=[$refresh_ids]"
+log "requested: done=[$done_ids] tasks=[$task_ids] mails=[$mail_ids] refresh=[$refresh_ids]"
 
 # 0) 完了の反映（Claude 不要・数秒）
 if [ -n "${done_ids// /}" ]; then
-  # shellcheck disable=SC2086
-  if res=$(python3 "$HERE/apply_done.py" $task_ids 2>>"$LOG"); then
-    log "$res"
-    n_ok=$(printf '%s\n' "$res" | grep -c '^反映' || true)
-    status done "完了をObsidianに反映しました（${n_ok}件）"
-  else
-    status error "完了の反映に失敗しました（Macのログを確認）"
+  msg="" ok=1
+  if [ -n "${task_ids// /}" ]; then
+    # shellcheck disable=SC2086
+    if res=$(python3 "$HERE/apply_done.py" $task_ids 2>>"$LOG"); then
+      log "$res"
+      n_ok=$(printf '%s\n' "$res" | grep -c '^反映' || true)
+      msg="完了をObsidianに反映しました（${n_ok}件）"
+    else ok=0; fi
   fi
+  # 対応済みにしたメールは gmail.json から消し、gmail_dismissed.json に足す（以後の更新でも出さない）
+  if [ -n "${mail_ids// /}" ]; then
+    # shellcheck disable=SC2086
+    if res=$(python3 "$HERE/dismiss_mail.py" $mail_ids 2>>"$LOG"); then
+      log "$res"
+      n_m=$(printf '%s\n' "$res" | grep -c '^除外' || true)
+      msg="${msg:+$msg・}メール${n_m}件を対応済みにしました"
+    else ok=0; fi
+  fi
+  if [ "$ok" = 1 ]; then status done "${msg:-完了を受け取りました}"
+  else status error "完了の反映に失敗しました（Macのログを確認）"; fi
   if [ -z "${refresh_ids// /}" ]; then
     "$HERE/publish.sh" >>"$LOG" 2>&1
     exit 0

@@ -337,6 +337,31 @@ def load_picks(path):
 
 # ---------- 組み立て・暗号化 ----------
 
+def mail_thread(url):
+    """Gmail の viewUrl からスレッド番号（thread-f: の数字）を取り出す。無ければ空文字。"""
+    m = re.search(r"thread-f:(\d+)", str(url or ""))
+    return m.group(1) if m else ""
+
+
+def mail_id(url):
+    """メールの項目ID。公開の issue にはスレッド番号でなくこの ID だけを送る。"""
+    t = mail_thread(url)
+    return item_id("mail", t) if t else ""
+
+
+def load_gmail(path):
+    """Claude が書いた gmail.json に、完了送信用の id を足す。"""
+    g = load_json(path, {"updated": None, "items": []})
+    if not isinstance(g, dict) or not isinstance(g.get("items"), list):
+        return {"updated": None, "items": []}
+    for it in g["items"]:
+        if isinstance(it, dict):
+            mid = mail_id(it.get("url"))
+            if mid:
+                it["id"] = mid
+    return g
+
+
 def load_json(path, default):
     try:
         return json.loads(path.read_text())
@@ -352,7 +377,7 @@ def build(today=None):
         "hub": parse_hub(HUB.read_text(), today),
         "oet": parse_oet_note(OET.read_text()) if OET.exists() else None,
         "calendar": load_json(CONF / "calendar.json", {"updated": None, "events": []}),
-        "gmail": load_json(CONF / "gmail.json", {"updated": None, "items": []}),
+        "gmail": load_gmail(CONF / "gmail.json"),
         "refresh": load_json(CONF / "status.json", None),
         "routines": parse_routines(ROUTINES, today),
         "training": load_training(),

@@ -237,8 +237,16 @@ function hideOld(items, checks, today) {
   return (items || []).filter(it => !(checks[it.id] && checks[it.id] < today));
 }
 // Mac へ送る完了の依頼。公開 issue なので本文には ID だけを書く
-function doneBody(ids) {
-  return ids.filter(x => /^[0-9a-f]{10}$/.test(x)).map(x => 'id:' + x).join('\n');
+// メールのチェック（data-id は 'mail:' + viewUrl）から、送信用の10桁IDを引く。無ければ空文字
+function mailHid(data, key) {
+  if (String(key).indexOf('mail:') !== 0) return '';
+  const m = ((data && data.gmail && data.gmail.items) || []).find(x => 'mail:' + x.url === key);
+  return m && /^[0-9a-f]{10}$/.test(m.id || '') ? m.id : '';
+}
+// 公開 issue の本文。タスクは「id:<10桁>」、メールは「mail:<10桁>」だけ（件名やスレッド番号は送らない）
+function doneBody(ids, data) {
+  return ids.map(x => /^[0-9a-f]{10}$/.test(x) ? 'id:' + x : (mailHid(data, x) ? 'mail:' + mailHid(data, x) : ''))
+    .filter(Boolean).join('\n');
 }
 function hubIds(data) {
   const set = new Set();
@@ -777,7 +785,7 @@ function queueDone(id, checked) {
   save();
   clearTimeout(flushTimer);
   if (S.outbox.length) {
-    R.msg = '⏳ ' + S.outbox.length + '件の完了を数秒後にObsidianへ送ります（取り消すならチェックを外す）'; R.err = false;
+    R.msg = '⏳ ' + S.outbox.length + '件の完了を数秒後にMacへ送ります（タスクはObsidianへ、メールは以後出さない。取り消すならチェックを外す）'; R.err = false;
     flushTimer = setTimeout(flushDone, 5000);
   } else if (!checked) { R.msg = ''; }
   showMsg();
@@ -785,12 +793,13 @@ function queueDone(id, checked) {
 async function flushDone() {
   const ids = S.outbox.slice();
   if (!ids.length || !S.gh) return;
+  if (!doneBody(ids, DATA)) { S.outbox = []; save(); return; } // 送れるIDが無い（データから消えた）
   let res;
   try {
     res = await fetch(REPO_API, {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + S.gh, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'done', body: doneBody(ids) }),
+      body: JSON.stringify({ title: 'done', body: doneBody(ids, DATA) }),
     });
   } catch (e) { res = null; }
   if (!res || !res.ok) {
@@ -908,6 +917,11 @@ async function start() {
   Object.keys(S.sent).forEach(k => { if (!live.has(k)) delete S.sent[k]; });
   save();
   S.outbox = S.outbox.filter(x => live.has(x));
+  // メールのチェックは以前は端末の中だけだった：まだ送っていないものも Mac へ送る（以後出さないように）
+  if (S.gh) ((DATA.gmail && DATA.gmail.items) || []).forEach(m => {
+    const k = 'mail:' + m.url;
+    if (S.checks[k] && !S.sent[k] && mailHid(DATA, k) && S.outbox.indexOf(k) < 0) S.outbox.push(k);
+  });
   save();
   document.getElementById('lock').hidden = true;
   document.getElementById('app').hidden = false;
@@ -929,13 +943,15 @@ function bind() {
     if (!t.checked && S.gh && S.sent[id]) {
       // すでにObsidianへ反映済み：ここで外しても戻らないので、チェックは残す
       t.checked = true;
-      R.msg = 'このタスクはObsidianに反映済みです。戻すときはObsidianのタスクハブで直してください'; R.err = true; showMsg();
+      R.msg = id.indexOf('mail:') === 0 ? 'このメールは対応済みとしてMacへ送りました（以後出しません）'
+        : 'このタスクはObsidianに反映済みです。戻すときはObsidianのタスクハブで直してください';
+      R.err = true; showMsg();
       return;
     }
     if (t.checked) S.checks[id] = todayISO(); else { delete S.checks[id]; delete S.sent[id]; }
     save();
     t.closest('li').classList.toggle('done', t.checked);
-    if (S.gh && hubIds(DATA).has(id)) queueDone(id, t.checked);
+    if (S.gh && (hubIds(DATA).has(id) || mailHid(DATA, id))) queueDone(id, t.checked);
     updateBar();
     // 英語タブのバッジ（未完了数）を合わせる
     const nav = document.querySelector('.tabbar');

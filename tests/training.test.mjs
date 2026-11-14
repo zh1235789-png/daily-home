@@ -193,3 +193,22 @@ const DAY_MENUS = {
   const out = JSON.parse(execFileSync('node', [new URL('../build/extract_training.mjs', import.meta.url).pathname, f], { encoding: 'utf8' }));
   assert.deepEqual(out.plan[0].alt, { satNth: [2, 4], runShort: 'バイク4×4', run: 'バイク4×4（第2・4土曜）' });
 });
+
+test('バイク4×4の日はジムのチェックに腹筋を足す（コーチの abs、2026-11-14）', () => {
+  const absMenu = { must: ['アブドミナル（志村マシン）', 'ロータリートルソー（志村マシン）'], optional: ['リバースクランチ（ベンチ）'], note: 'バイク4×4のあとに' };
+  const t = { ...training,
+    plan: [
+      { days: [6], key: 'sat', label: '土', focus: '胸と背中', run: 'なし（朝から仕事）', leg: null, note: '',
+        alt: { satNth: [2, 4], run: 'バイク4×4（第2・4土曜）', abs: true } },
+      { days: [0], key: 'sun', label: '日', focus: '振替', run: 'バイク4×4', leg: null, note: '', abs: true,
+        alt: { satNth: [2, 4], run: 'なし（バイク4×4は土曜に済ませた週）', abs: false } },
+    ],
+    menus: { '1': { sat: { must: ['マシンチェストプレス'], optional: [] }, abs: absMenu }, '2': {} } };
+  const sat = app.trainSec(t, '2026-11-14');   // 第2土曜（バイク）
+  assert.match(sat, /🏋️ <b>胸と背中＋腹筋<\/b>/);
+  assert.match(sat, /マシンチェストプレス.*💪 腹筋（バイク4×4のあと）<\/div><ol><li>アブドミナル（志村マシン）<\/li><li>ロータリートルソー（志村マシン）<\/li><\/ol>.*リバースクランチ（ベンチ）.*※ バイク4×4のあとに/s);
+  assert.match(app.trainSec(t, '2026-11-22'), /🏋️ <b>振替＋腹筋<\/b>/);   // 第3土曜の週の日曜（バイク）
+  for (const ds of ['2026-11-15', '2026-11-21']) assert.doesNotMatch(app.trainSec(t, ds), /腹筋/, ds);   // バイクのない日曜・土曜
+  // 腹筋のメニューが無い古いデータでは出さない
+  assert.doesNotMatch(app.trainSec({ ...t, menus: { '1': {}, '2': {} } }, '2026-11-14'), /腹筋/);
+});

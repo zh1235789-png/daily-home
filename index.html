@@ -719,6 +719,13 @@ function trainSec(training, today) {
     gym += '<ol>' + m.must.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
     if (m.optional && m.optional.length) gym += '<div class="sub" style="margin-top:4px">余裕があれば</div><ol class="opt">' + m.optional.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
   }
+  // バイク4×4の日はバイクのあとにジムで腹筋（コーチの WEEK_PLAN の abs と DAY_MENUS の abs、2026-11-14〜）
+  const abs = slot.abs && ((training.menus || {})[S.gym] || {}).abs;
+  if (abs) {
+    gym += '<div class="sub" style="margin-top:4px">💪 腹筋（バイク4×4のあと）</div><ol>' + abs.must.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
+    if (abs.optional && abs.optional.length) gym += '<div class="sub" style="margin-top:4px">余裕があれば</div><ol class="opt">' + abs.optional.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
+    if (abs.note) gym += '<div class="tags"><span>※ ' + esc(abs.note) + '</span></div>';
+  }
   if (slot.note) gym += '<div class="tags"><span>※ ' + esc(slot.note) + '</span></div>';
   if (slot.leg !== null && slot.leg !== undefined) gym += '<div class="tags"><span>※ ハムに痛みがある日は脚を外す</span></div>';
   if (slot.kb) {
@@ -729,7 +736,7 @@ function trainSec(training, today) {
     kb += '<div class="tags"><span>※ ランの日はランの後に。翌朝ハムの張りが残っていたら軽めに</span></div>';
     ul += trainLi('train:' + today + ':kb', '🔔 <b>自宅ケトルベル（' + esc(slot.kbShort || slot.kb.replace(/（.*/, '')) + '）</b>', kb);
   }
-  ul += trainLi('train:' + today + ':gym', '🏋️ <b>' + esc(slot.focus) + '</b>', gym);
+  ul += trainLi('train:' + today + ':gym', '🏋️ <b>' + esc(slot.focus) + (abs ? '＋腹筋' : '') + '</b>', gym);
   ul += '</ul>';
   const head = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px"><span class="sub">ジム</span>' + seg + '</div>';
   return sec('🏃 ラン・筋トレ', null, head + ul + tmr, 'train');

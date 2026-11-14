@@ -655,11 +655,19 @@ function stockSec(stocks, today) {
   return sec('📉 下落アラート' + (nf ? '（新規）' : ''), nf ? nf : total, h);
 }
 // ---------- ラン・筋トレ ----------
+// その日を含む週（月曜始まり）の土曜が、その月の第何土曜か（1〜5）（純粋関数）
+function satNthOfWeek(iso) {
+  const dow = new Date(iso + 'T00:00:00Z').getUTCDay();
+  return Math.ceil(Number(addDays(iso, dow === 0 ? -1 : 6 - dow).slice(8, 10)) / 7);
+}
 // 筋トレAIコーチの WEEK_PLAN から、その日の枠を返す。枠が無い曜日（月・木）は null＝手術日で休み（純粋関数）
+// その週だけの上書き alt（2026-11-14〜。第2・4土曜の週はバイク4×4が土曜、日曜はなし）があれば重ねる
 function trainingFor(training, iso) {
   const dow = new Date(iso + 'T00:00:00Z').getUTCDay();
   const slot = ((training && training.plan) || []).filter(p => (p.days || []).indexOf(dow) >= 0)[0];
-  return slot || null;
+  if (!slot) return null;
+  const alt = slot.alt;
+  return alt && (alt.satNth || []).indexOf(satNthOfWeek(iso)) >= 0 ? Object.assign({}, slot, alt) : slot;
 }
 // 月・木（手術日）の朝メニュー（コーチの OFF_DAY_PLAN、2026-11-01〜）。無い日・古いデータは null（純粋関数）
 // 曜日ごとの上書き byDay（2026-11-12〜。月は体幹タバタだけ）があれば重ねる
@@ -703,7 +711,9 @@ function trainSec(training, today) {
   const seg = '<span class="seg">' + ['1', '2'].map(g => '<button type="button" data-act="gym" data-gym="' + g + '" class="' + (S.gym === g ? '' : 'ghost') + '" aria-pressed="' + (S.gym === g) + '">' + GYM_LABEL[g] + '</button>').join('') + '</span>';
   const noRun = /^なし/.test(slot.run);
   let ul = '<ul>';
-  if (!noRun) ul += trainLi('train:' + today + ':run', '🏃 ' + esc(slot.run), '<div class="tags"><span>Garminコーチの今日のワークアウトに従う。インターバルは最大の8〜9割</span></div>');
+  const bike = /^バイク/.test(slot.run);   // 週末のバイク4×4（ランではないのでGarminの注意は出さない）
+  if (!noRun) ul += trainLi('train:' + today + ':run', (bike ? '🚴 ' : '🏃 ') + esc(slot.run), '<div class="tags"><span>' +
+    (bike ? '数値は筋トレAIコーチの「有酸素運動を記録 → バイク4×4」に' : 'Garminコーチの今日のワークアウトに従う。インターバルは最大の8〜9割') + '</span></div>');
   let gym = '<div class="sub">' + esc(legText(slot.leg)) + '</div>';
   if (m) {
     gym += '<ol>' + m.must.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';

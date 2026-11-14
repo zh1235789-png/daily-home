@@ -147,3 +147,49 @@ test('チェックを保存する ID（trainIds）は、画面に出すチェッ
   }
   assert.equal(app.trainLeft({ training: t }, { 'train:2026-11-12:walk': '2026-11-12' }, '2026-11-12'), 1);
 });
+
+test('週末のバイク4×4: コーチの alt で、第2・4土曜の週は土曜、それ以外の週は日曜（2026-11-14）', () => {
+  const t = { ...training, plan: [
+    { days: [6], key: 'sat', label: '土', focus: '胸と背中', run: 'なし（第1・3・5土曜は朝から仕事）', runShort: 'なし', leg: null, note: '',
+      alt: { satNth: [2, 4], runShort: 'バイク4×4', run: 'バイク4×4（第2・4土曜。筋トレ前）' } },
+    { days: [0], key: 'sun', label: '日', focus: '振替', run: 'バイク4×4（筋トレ前）', runShort: 'バイク4×4', leg: null, note: '',
+      alt: { satNth: [2, 4], runShort: 'なし（バイクは土曜）', run: 'なし（バイク4×4は土曜に済ませた週）' } },
+  ] };
+  assert.equal(app.satNthOfWeek('2026-11-14'), 2);
+  assert.equal(app.satNthOfWeek('2026-11-15'), 2);   // 日曜は前日の土曜で決まる
+  assert.equal(app.satNthOfWeek('2026-03-01'), 4);   // 前日は2/28（第4土曜）
+  assert.equal(app.satNthOfWeek('2026-11-01'), 5);   // 前日は10/31（第5土曜）
+  // 第2土曜の週: 土曜にバイクのチェック（Garminの注意は出さない）、日曜はランのチェックなし
+  const sat = app.trainSec(t, '2026-11-14');
+  assert.match(sat, /data-id="train:2026-11-14:run"/);
+  assert.match(sat, /🚴 バイク4×4（第2・4土曜。筋トレ前）/);
+  assert.match(sat, /筋トレAIコーチの「有酸素運動を記録 → バイク4×4」/);
+  assert.doesNotMatch(sat, /Garminコーチ/);
+  assert.deepEqual(norm(app.trainIds(t, '2026-11-15')), ['train:2026-11-15:gym']);
+  assert.equal(app.dayKind(t, '2026-11-14'), 'both');
+  assert.equal(app.dayKind(t, '2026-11-15'), 'gym');
+  // 第3土曜の週: 今までどおり日曜
+  assert.deepEqual(norm(app.trainIds(t, '2026-11-21')), ['train:2026-11-21:gym']);
+  assert.match(app.trainSec(t, '2026-11-22'), /🚴 バイク4×4（筋トレ前）/);
+  // 今週の表も週ごとに変わる
+  assert.match(app.weekPlanSec(t, '2026-11-12'), /<td>土<\/td><td>バイク4×4<\/td>.*<td>日<\/td><td>なし（バイクは土曜）<\/td>/s);
+  assert.match(app.weekPlanSec(t, '2026-11-19'), /<td>土<\/td><td>なし<\/td>.*<td>日<\/td><td>バイク4×4<\/td>/s);
+  // alt の無い古いデータは今までどおり
+  assert.equal(norm(app.trainingFor(training, '2026-11-14')).run, 'なし（朝から仕事）');
+});
+
+test('抽出スクリプト：コーチの alt（その週だけの上書き）もそのまま渡す', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'coach-'));
+  const f = join(dir, 'index.html');
+  writeFileSync(f, `<script>
+const WEEK_PLAN = [
+  { days:[6], key:'sat', label:'土', focus:'胸と背中', run:'なし', leg:null,
+    alt:{ satNth:[2,4], runShort:'バイク4×4', run:'バイク4×4（第2・4土曜）' } },
+];
+const DAY_MENUS = {
+  '1': {},
+};
+</script>`);
+  const out = JSON.parse(execFileSync('node', [new URL('../build/extract_training.mjs', import.meta.url).pathname, f], { encoding: 'utf8' }));
+  assert.deepEqual(out.plan[0].alt, { satNth: [2, 4], runShort: 'バイク4×4', run: 'バイク4×4（第2・4土曜）' });
+});

@@ -150,5 +150,10 @@ test('自動作業：今日と昨日の記録だけを出し、要約・ノー�
   assert.match(html, /3件: THOR-2続報/);
   assert.match(html, /2件を移動/);
   assert.match(html, /file=%E6%B3%8C/); // 成果物ノートへのリンク
+  // 本文ノートがある時は実行記録ノートへのリンクを出さない（同じ名前が2つ並んで見えたため）
+  assert.doesNotMatch(html, new RegExp('file=' + encodeURIComponent('2026-10-21_泌尿器科週次アップデート')));
+  // 本文ノートが無いルーティンは実行記録ノートへのリンクを出す
+  assert.match(html, new RegExp('file=' + encodeURIComponent('2026-10-20_Downloads整理')));
+  assert.equal((html.match(/class="note"/g) || []).length, 2);
   assert.equal(norm(app.routineList({}, '2026-10-21')).length, 0);
 });

@@ -283,10 +283,11 @@ def parse_goals_note(md, stem):
     m = re.search(r"^## 🎯 来週の抱負（\s*(\d{1,2})/(\d{1,2})\s*〜\s*(\d{1,2})/(\d{1,2})\s*）", md, re.M)
     if not m:
         return None
-    year = int(stem[:4])
+    year, note_month = int(stem[:4]), int(stem[5:7])
     sm, sd, em, ed = (int(x) for x in m.groups())
-    start = infer_date(year, sm, sd)
-    end = infer_date(year + (1 if em < sm else 0), em, ed)
+    sy = year + (1 if sm < note_month else 0)  # 12/31（日）のノートに「1/1〜1/7」と書いた場合
+    start = infer_date(sy, sm, sd)
+    end = infer_date(sy + (1 if em < sm else 0), em, ed)
     if not start or not end:
         return None
     items = []

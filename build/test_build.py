@@ -144,6 +144,8 @@ class Goals(unittest.TestCase):
     def test_year_end(self):
         g = parse_goals_note("## 🎯 来週の抱負（12/28〜1/3）\n- [ ] a\n", "2026-12-27")
         self.assertEqual((g["start"], g["end"]), ("2026-12-28", "2027-01-03"))
+        g = parse_goals_note("## 🎯 来週の抱負（1/1〜1/7）\n- [ ] a\n", "2028-12-31")
+        self.assertEqual((g["start"], g["end"]), ("2029-01-01", "2029-01-07"))
 
     def test_load_latest_until_end(self):
         with tempfile.TemporaryDirectory() as d:

@@ -4,7 +4,7 @@ import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import tempfile
-from build import load_picks, load_stocks, load_youtube, parse_due, parse_hub, parse_routines
+from build import load_goals, parse_goals_note, parse_scores, load_picks, load_stocks, load_youtube, parse_due, parse_hub, parse_routines
 
 T = dt.date(2026, 10, 20)
 
@@ -113,6 +113,65 @@ class Stocks(unittest.TestCase):
             r = load_picks(p)
             self.assertEqual([x["ticker"] for x in r["picks"]], ["AMAT"])
             self.assertEqual([x["title"] for x in r["sources"]], ["a"])
+
+
+GOALS_MD = """# 2026-11-15 (日)
+## 🗓 今週の振り返り（11/09〜11/15）
+- [ ] 月 予定: ウォーキング
+## 🎯 来週の抱負（11/16〜11/22）
+- [ ] 🇬🇧 **OET を4日以上**
+  - 理由：今週は1/7日だけ
+  - 最初の一歩（月）：朝に①を通す
+- [x] 🏋️ 筋トレ3回
+## ✍️ 自分で書く
+- [ ] 混ざらないこと
+"""
+
+
+class Goals(unittest.TestCase):
+    def test_parse(self):
+        g = parse_goals_note(GOALS_MD, "2026-11-15")
+        self.assertEqual((g["start"], g["end"], g["label"]), ("2026-11-16", "2026-11-22", "11/16〜11/22"))
+        self.assertEqual([i["text"] for i in g["items"]], ["🇬🇧 **OET を4日以上**", "🏋️ 筋トレ3回"])
+        self.assertEqual(g["items"][0]["why"], "今週は1/7日だけ")
+        self.assertEqual(g["items"][0]["first"], "朝に①を通す")
+        self.assertEqual([i["done"] for i in g["items"]], [False, True])
+        self.assertTrue(g["items"][0]["id"].startswith("goal:"))
+
+    def test_none_without_section(self):
+        self.assertIsNone(parse_goals_note("# 2026-11-15\n## 📝 ジャーナル\n- [ ] x\n", "2026-11-15"))
+
+    def test_year_end(self):
+        g = parse_goals_note("## 🎯 来週の抱負（12/28〜1/3）\n- [ ] a\n", "2026-12-27")
+        self.assertEqual((g["start"], g["end"]), ("2026-12-28", "2027-01-03"))
+
+    def test_load_latest_until_end(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "2026-11-08.md").write_text("## 🎯 来週の抱負（11/9〜11/15）\n- [ ] 古い\n")
+            Path(d, "2026-11-15.md").write_text(GOALS_MD)
+            Path(d, "2026-11-17.md").write_text("# 平日のノート（抱負なし）\n")
+            self.assertEqual(load_goals(Path(d), dt.date(2026, 11, 15))["note"], "2026-11-15")
+            self.assertEqual(load_goals(Path(d), dt.date(2026, 11, 22))["note"], "2026-11-15")
+            self.assertIsNone(load_goals(Path(d), dt.date(2026, 11, 23)))
+
+class Scores(unittest.TestCase):
+    MD = """# 週の点数
+| 週 | 点数 | 運動 | 英語 | 筋トレ | 有酸素 | KB | OET日数 | 抱負 |
+|---|---|---|---|---|---|---|---|---|
+| 11/2〜11/8 <!--2026-11-08--> | **10** | 10 | 0 | 1/4 | 0/4 | 2/6 | 0/6 | — |
+| [[2026-11-15\\|11/9〜11/15]] | **48** | 40 | 8 | 3/4 | 4/4 | 4/6 | 1/6 | 2.5/4 |
+"""
+
+    def test_parse(self):
+        r = parse_scores(self.MD)
+        self.assertEqual([x["label"] for x in r], ["11/2〜11/8", "11/9〜11/15"])
+        self.assertEqual([x["week"] for x in r], ["2026-11-08", "2026-11-15"])
+        self.assertEqual((r[1]["total"], r[1]["move"], r[1]["eng"], r[1]["goals"]), (48, 40, 8, "2.5/4"))
+        self.assertEqual(r[0]["goals"], "")
+
+    def test_keep_latest(self):
+        rows = "".join(f"| [[2026-01-{d:02d}\\\\|w{d}]] | **{d}** | 1 | 1 | a | b | c | d | — |\n" for d in range(1, 13))
+        self.assertEqual([x["total"] for x in parse_scores(rows, keep=3)], [10, 11, 12])
 
 
 if __name__ == "__main__":

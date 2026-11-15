@@ -113,7 +113,25 @@ button.cd.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent)
 .lead { font-size: 13px; color: var(--sub); margin: 0 0 6px; padding-left: 10px; border-left: 3px solid var(--line); }
 .empty { color: var(--sub); font-size: 13px; padding: 4px 0; }
 .from { font-size: 12px; color: var(--sub); }
-.routine .rl { font-size: 13px; color: var(--sub); }
+.routine .rl, .goal .rl { font-size: 13px; color: var(--sub); }
+.sc-now { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.sc-big { font-size: 30px; font-weight: 700; }
+.sc-big small { font-size: 14px; font-weight: 400; margin-left: 2px; }
+.sc-diff { font-size: 13px; color: var(--sub); }
+.sc-diff.up { color: var(--green); } .sc-diff.down { color: var(--red); }
+.sc-chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; margin: 12px 0 4px; }
+.sc-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; min-width: 0; }
+.sc-val { font-size: 11px; color: var(--sub); }
+.sc-bar { flex: 1; width: 100%; max-width: 34px; display: flex; flex-direction: column-reverse; background: var(--chip); border-radius: 4px; overflow: hidden; }
+.sc-bar i, .sc-key i { display: block; }
+.sc-bar .move, .sc-key .move { background: var(--accent); }
+.sc-bar .eng, .sc-key .eng { background: var(--green); }
+.sc-bar i { width: 100%; }
+.sc-lab { font-size: 11px; color: var(--sub); margin-top: 2px; }
+.sc-key { display: flex; gap: 12px; font-size: 12px; color: var(--sub); }
+.sc-key i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: -1px; }
+section .rl { font-size: 13px; color: var(--sub); }
+
 .train .sub { font-size: 13px; color: var(--sub); }
 .yt .head { font-size: 14px; font-weight: 600; margin-top: 2px; }
 .yt ul.pts { list-style: disc; padding-left: 18px; margin: 4px 0 0; font-size: 13px; }
@@ -355,6 +373,11 @@ function render() {
   h += sec('✉️ 対応が必要なメール', mailOpen.length,
     mails.length ? '<ul>' + mails.map(m => mailLi(m)).join('') + '</ul>' : '<p class="empty">要対応のメールはありません</p>');
 
+  const scores = (d.scores || []).filter(x => x && typeof x.total === 'number');
+  if (scores.length) h += scoreSec(scores);
+  const goals = goalList(d, today);
+  if (goals) h += goalSec(goals, today, S.checks);
+
   const runs = routineList(d, today);
   if (runs.length) h += routineSec(runs, today);
 
@@ -424,6 +447,43 @@ function mailLi(m) {
     '<div class="body"><div class="from">' + esc(m.from) + ' · ' + esc(md(m.date)) + (m.waiting ? ' · 返信待ち' : '') + '</div>' +
     '<div class="txt"><a href="' + esc(m.url) + '" target="_blank" rel="noopener">' + esc(m.subject) + '</a></div>' +
     '<div class="tags"><span>' + esc(m.action) + '</span></div></div></li>';
+}
+// 週の点数（運動50＋英語50）。最新の週と、直近の推移を棒で出す（純粋関数）
+function scoreSec(list) {
+  const last = list[list.length - 1], prev = list.length > 1 ? list[list.length - 2] : null;
+  const diff = prev ? last.total - prev.total : null;
+  let h = '<div class="sc-now"><span class="sc-big">' + last.total + '<small>点</small></span>' +
+    (diff != null ? '<span class="sc-diff ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '') + '">前週' + (diff > 0 ? '+' : '') + diff + '</span>' : '') +
+    '<span class="meta">' + esc(last.label) + '</span></div>' +
+    '<div class="rl">🏋️ 運動 ' + last.move + '/50（筋トレ' + esc(last.gym) + '・有酸素' + esc(last.cardio) + '・KB' + esc(last.kb) + '）</div>' +
+    '<div class="rl">🇬🇧 英語 ' + last.eng + '/50（OET ' + esc(last.oet) + '日）' + (last.goals ? '　🎯 抱負 ' + esc(last.goals) : '') + '</div>';
+  h += '<div class="sc-chart" role="img" aria-label="週の点数の推移">' + list.map(x =>
+    '<div class="sc-col"><span class="sc-val">' + x.total + '</span><div class="sc-bar">' +
+    '<i class="eng" style="height:' + Math.max(0, Math.min(50, x.eng)) + '%"></i>' +
+    '<i class="move" style="height:' + Math.max(0, Math.min(50, x.move)) + '%"></i></div>' +
+    '<span class="sc-lab">' + esc(String(x.label).split('〜')[0]) + '</span></div>').join('') + '</div>' +
+    '<div class="sc-key"><span><i class="move"></i>運動</span><span><i class="eng"></i>英語</span></div>';
+  return sec('📊 週の点数', null, h);
+}
+// ---------- 今週の抱負（日曜の振り返りがデイリーノートに書く） ----------
+// 期間が終わっていない抱負だけ。始まる前（日曜の夜など）は「来週の抱負」として出す（純粋関数）
+function goalList(data, today) {
+  const g = data && data.goals;
+  if (!g || !Array.isArray(g.items) || !g.items.length || !g.end || g.end < today) return null;
+  return g;
+}
+// チェックはこの端末の中だけ（タスクハブやInboxには送らない）
+function goalSec(g, today, checks) {
+  const left = g.items.filter(it => !it.done && !checks[it.id]).length;
+  const title = (today < g.start ? '🎯 来週の抱負' : '🎯 今週の抱負') + '（' + esc(g.label) + '）';
+  const h = '<ul>' + g.items.map(it => {
+    const done = it.done || !!checks[it.id];
+    return '<li class="task goal' + (done ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(it.id) + '"' + (done ? ' checked' : '') + (it.done ? ' disabled' : '') + ' aria-label="達成">' +
+      '<div class="body"><div class="txt">' + inline(it.text) + '</div>' +
+      (it.first ? '<div class="rl">👣 ' + inline(it.first) + '</div>' : '') +
+      (it.why ? '<div class="rl">💡 ' + inline(it.why) + '</div>' : '') + '</div></li>';
+  }).join('') + '</ul><div class="tags" style="margin:2px 0 0">' + noteLink(g.note) + '</div>';
+  return sec(title, left, h);
 }
 // ルーティン（まとめ作成・ファイル整理）の実行記録のうち今日と昨日の分（純粋関数）
 function routineList(data, today) {
@@ -973,7 +1033,7 @@ function bind() {
     // 英語タブのバッジ（未完了数）を合わせる
     const nav = document.querySelector('.tabbar');
     if (nav) nav.outerHTML = tabNav(S.tab, DATA, todayISO());
-    if (id.indexOf('eng:') === 0) render(); // 「済 n/4」を合わせる
+    if (id.indexOf('eng:') === 0 || id.indexOf('goal:') === 0) render(); // 「済 n/4」・抱負の残り数を合わせる
   });
   document.getElementById('shareBtn').addEventListener('click', async () => {
     const items = pendingReports(DATA, S.checks, S.sent);

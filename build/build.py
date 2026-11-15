@@ -26,6 +26,8 @@ VAULT = HOME / "Library/Mobile Documents/iCloud~md~obsidian/Documents/Obsidian V
 HUB = VAULT / "03_Personal/03.1_Tasks/タスクハブ.md"
 OET = VAULT / "📌 今日のOET学習.md"
 ROUTINES = VAULT / "09_Projects/Claude Routines"
+DAILY = VAULT / "04_Journal/04.1_Daily"
+SCORES = VAULT / "04_Journal/04.2_Weekly/週の点数.md"
 COACH = HOME / "workout-ai-coach/index.html"
 CONF = HOME / ".config/daily-home"
 REPO = Path(__file__).resolve().parent.parent
@@ -274,6 +276,81 @@ def parse_routines(folder, today, days=2):
     return items
 
 
+# ---------- 今週の抱負（日曜の振り返りがデイリーノートに書く） ----------
+
+def parse_goals_note(md, stem):
+    """デイリーノートの「## 🎯 来週の抱負（11/16〜11/22）」を取り出す。無ければ None。"""
+    m = re.search(r"^## 🎯 来週の抱負（\s*(\d{1,2})/(\d{1,2})\s*〜\s*(\d{1,2})/(\d{1,2})\s*）", md, re.M)
+    if not m:
+        return None
+    year = int(stem[:4])
+    sm, sd, em, ed = (int(x) for x in m.groups())
+    start = infer_date(year, sm, sd)
+    end = infer_date(year + (1 if em < sm else 0), em, ed)
+    if not start or not end:
+        return None
+    items = []
+    for line in section(md, "🎯 来週の抱負").splitlines():
+        top = re.match(r"^- \[( |x|X)\]\s+(.+)$", line)
+        if top:
+            text = top.group(2).strip()
+            items.append({"id": "goal:" + item_id("goal", stem, text), "text": text,
+                          "done": top.group(1) != " ", "why": "", "first": ""})
+            continue
+        sub = re.match(r"^\s+- (理由|最初の一歩[^：:]*)[：:]\s*(.*)$", line)
+        if sub and items:
+            items[-1]["why" if sub.group(1) == "理由" else "first"] = sub.group(2).strip()
+    if not items:
+        return None
+    return {"note": stem, "start": start.isoformat(), "end": end.isoformat(),
+            "label": f"{sm}/{sd}〜{em}/{ed}", "items": items}
+
+
+def load_goals(folder, today):
+    """いちばん新しい抱負のうち、まだ期間が終わっていないもの（来週分も含む）。"""
+    try:
+        files = sorted((p for p in folder.glob("*.md") if re.match(r"^\d{4}-\d{2}-\d{2}$", p.stem)), reverse=True)
+    except OSError:
+        return None
+    for p in files[:21]:
+        try:
+            g = parse_goals_note(p.read_text(encoding="utf-8"), p.stem)
+        except OSError:
+            continue
+        if g:
+            return g if g["end"] >= today.isoformat() else None
+    return None
+
+
+def parse_scores(md, keep=8):
+    """週の点数ノート（~/bin/week_score.py が書く表）から直近 keep 週分を古い順に。"""
+    out = []
+    for line in md.splitlines():
+        if not line.startswith("| ") or line.startswith(("| 週", "|---")):
+            continue
+        cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip())[1:-1]]
+        if len(cells) < 9:
+            continue
+        m = re.search(r"(\d{4}-\d{2}-\d{2})", cells[0])
+        label = re.sub(r"<!--.*?-->", "", re.sub(r"^\[\[[^\]]*?\\\|(.+?)\]\]$", r"\1", cells[0])).strip()
+        try:
+            total, move, eng = (int(re.sub(r"\D", "", c)) for c in cells[1:4])
+        except ValueError:
+            continue
+        out.append({"week": m.group(1) if m else "", "label": label, "total": total, "move": move, "eng": eng,
+                    "gym": cells[4], "cardio": cells[5], "kb": cells[6], "oet": cells[7],
+                    "goals": "" if cells[8] in ("—", "-") else cells[8]})
+    out.sort(key=lambda x: x["week"])
+    return out[-keep:]
+
+
+def load_scores(path):
+    try:
+        return parse_scores(path.read_text(encoding="utf-8"))
+    except OSError:
+        return []
+
+
 # ---------- ラン・筋トレ（筋トレAIコーチの週の予定） ----------
 
 def find_node():
@@ -380,6 +457,8 @@ def build(today=None):
         "gmail": load_gmail(CONF / "gmail.json"),
         "refresh": load_json(CONF / "status.json", None),
         "routines": parse_routines(ROUTINES, today),
+        "goals": load_goals(DAILY, today),
+        "scores": load_scores(SCORES),
         "training": load_training(),
         "youtube": load_youtube(CONF / "youtube.json"),
         "stocks": load_stocks(CONF / "stocks.json"),

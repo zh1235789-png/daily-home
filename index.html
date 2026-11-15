@@ -197,9 +197,9 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!s || typeof s !== 'object') throw new Error('bad');
-    return { tab: TABS.indexOf(s.tab) >= 0 ? s.tab : 'home', gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [] };
+    return { tab: TABS.indexOf(s.tab) >= 0 ? s.tab : 'home', gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [], engOut: s.engOut && typeof s.engOut === 'object' ? s.engOut : {} };
   } catch (e) {
-    return { tab: 'home', gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [] };
+    return { tab: 'home', gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [], engOut: {} };
   }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存できなくても表示は続ける */ } }
@@ -265,6 +265,14 @@ function mailHid(data, key) {
 function doneBody(ids, data) {
   return ids.map(x => /^[0-9a-f]{10}$/.test(x) ? 'id:' + x : (mailHid(data, x) ? 'mail:' + mailHid(data, x) : ''))
     .filter(Boolean).join('\n');
+}
+// 毎日の英語の記録を Mac へ送る行。公開 issue なので「e:日付:5桁の0/1」（ENG_DAILY の順に済=1）だけ（純粋関数）
+function engMask(checks, date) {
+  return ENG_DAILY.map(r => checks['eng:' + date + ':' + r[0]] ? '1' : '0').join('');
+}
+function engBody(engOut) {
+  return Object.keys(engOut || {}).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && /^[01]{5}$/.test(engOut[d])).sort()
+    .map(d => 'e:' + d.replace(/-/g, '') + ':' + engOut[d]).join('\n');
 }
 function hubIds(data) {
   const set = new Set();
@@ -456,7 +464,7 @@ function scoreSec(list) {
     (diff != null ? '<span class="sc-diff ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '') + '">前週' + (diff > 0 ? '+' : '') + diff + '</span>' : '') +
     '<span class="meta">' + esc(last.label) + '</span></div>' +
     '<div class="rl">🏋️ 運動 ' + last.move + '/50（筋トレ' + esc(last.gym) + '・有酸素' + esc(last.cardio) + '・KB' + esc(last.kb) + '）</div>' +
-    '<div class="rl">🇬🇧 英語 ' + last.eng + '/50（OET ' + esc(last.oet) + '日）' + (last.goals ? '　🎯 抱負 ' + esc(last.goals) : '') + '</div>';
+    '<div class="rl">🇬🇧 英語 ' + last.eng + '/50（OET ' + esc(last.oet) + '日' + (last.daily ? '・毎日の英語 ' + esc(last.daily) : '') + '）' + (last.goals ? '　🎯 抱負 ' + esc(last.goals) : '') + '</div>';
   h += '<div class="sc-chart" role="img" aria-label="週の点数の推移">' + list.map(x =>
     '<div class="sc-col"><span class="sc-val">' + x.total + '</span><div class="sc-bar">' +
     '<i class="eng" style="height:' + Math.max(0, Math.min(50, x.eng)) + '%"></i>' +
@@ -867,16 +875,25 @@ function queueDone(id, checked) {
   } else if (!checked) { R.msg = ''; }
   showMsg();
 }
+// 毎日の英語は、チェックのたびにその日の5つの状態を送る（外したときも送り直す。Mac は新しい方を採る）
+function queueEng(date) {
+  S.engOut[date] = engMask(S.checks, date);
+  save();
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushDone, 5000);
+}
 async function flushDone() {
   const ids = S.outbox.slice();
-  if (!ids.length || !S.gh) return;
-  if (!doneBody(ids, DATA)) { S.outbox = []; save(); return; } // 送れるIDが無い（データから消えた）
+  const eng = Object.assign({}, S.engOut || {});
+  if ((!ids.length && !Object.keys(eng).length) || !S.gh) return;
+  const body = [doneBody(ids, DATA), engBody(eng)].filter(Boolean).join('\n');
+  if (!body) { S.outbox = []; S.engOut = {}; save(); return; } // 送れるIDが無い（データから消えた）
   let res;
   try {
     res = await fetch(REPO_API, {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + S.gh, Accept: 'application/vnd.github+json', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'done', body: doneBody(ids, DATA) }),
+      body: JSON.stringify({ title: 'done', body: body }),
     });
   } catch (e) { res = null; }
   if (!res || !res.ok) {
@@ -884,6 +901,8 @@ async function flushDone() {
   }
   S.outbox = S.outbox.filter(x => ids.indexOf(x) < 0);
   ids.forEach(x => { S.sent[x] = todayISO(); });
+  // 送っている間に同じ日をまた変えていたら、その日は次に送る
+  Object.keys(eng).forEach(d => { if (S.engOut[d] === eng[d]) delete S.engOut[d]; });
   save();
   try { R.req = (await res.json()).number; } catch (e) { R.req = 0; }
   R.pressed = Date.now();
@@ -988,6 +1007,7 @@ async function start() {
   ['week', 'dated', 'big', 'someday'].forEach(k => walk(DATA.hub[k]));
   ((DATA.oet && DATA.oet.menu) || []).forEach(m => live.add(m.id));
   engRoutine(todayISO()).forEach(r => live.add(r.id));
+  ((DATA.goals && DATA.goals.items) || []).forEach(g => live.add(g.id));
   trainIds(DATA.training, todayISO()).forEach(id => live.add(id));
   ((DATA.gmail && DATA.gmail.items) || []).forEach(m => live.add('mail:' + m.url));
   Object.keys(S.checks).forEach(k => { if (!live.has(k)) delete S.checks[k]; });
@@ -1003,7 +1023,7 @@ async function start() {
   document.getElementById('lock').hidden = true;
   document.getElementById('app').hidden = false;
   render();
-  if (S.gh && S.outbox.length && !flushTimer) flushTimer = setTimeout(flushDone, 1000);
+  if (S.gh && (S.outbox.length || Object.keys(S.engOut).length) && !flushTimer) flushTimer = setTimeout(flushDone, 1000);
 }
 
 function bind() {
@@ -1029,6 +1049,7 @@ function bind() {
     save();
     t.closest('li').classList.toggle('done', t.checked);
     if (S.gh && (hubIds(DATA).has(id) || mailHid(DATA, id))) queueDone(id, t.checked);
+    if (S.gh && id.indexOf('eng:') === 0) queueEng(id.split(':')[1]);
     updateBar();
     // 英語タブのバッジ（未完了数）を合わせる
     const nav = document.querySelector('.tabbar');

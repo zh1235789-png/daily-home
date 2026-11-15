@@ -81,6 +81,8 @@ done_ids=$(nums done)
 done_body=$(printf '%s' "$open_json" | jq -r '.[] | select(.title == "done") | .body // ""')
 task_ids=$(printf '%s\n' "$done_body" | grep -oE '(^|[^a-z])id:[0-9a-f]{10}' | grep -oE '[0-9a-f]{10}$' | sort -u | tr '\n' ' ')
 mail_ids=$(printf '%s\n' "$done_body" | grep -oE 'mail:[0-9a-f]{10}' | cut -c6- | sort -u | tr '\n' ' ')
+# 毎日の英語の記録「e:日付:5桁」。新しい issue が先に来る順のまま渡す（同じ日は先の方を採る）
+eng_lines=$(printf '%s\n' "$done_body" | { grep -oE '^e:[0-9]{8}:[01]{5}$' || true; } | tr '\n' ' ')
 ids="$done_ids $refresh_ids"
 [ -z "${ids// /}" ] && exit 0
 
@@ -94,7 +96,7 @@ fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 for n in $ids; do gh api -X PATCH "repos/$REPO_SLUG/issues/$n" -f state=closed -f state_reason=completed >/dev/null 2>>"$LOG"; done
-log "requested: done=[$done_ids] tasks=[$task_ids] mails=[$mail_ids] refresh=[$refresh_ids]"
+log "requested: done=[$done_ids] tasks=[$task_ids] mails=[$mail_ids] eng=[$eng_lines] refresh=[$refresh_ids]"
 
 # 0) 完了の反映（Claude 不要・数秒）
 if [ -n "${done_ids// /}" ]; then
@@ -114,6 +116,12 @@ if [ -n "${done_ids// /}" ]; then
       log "$res"
       n_m=$(printf '%s\n' "$res" | grep -c '^除外' || true)
       msg="${msg:+$msg・}メール${n_m}件を対応済みにしました"
+    else ok=0; fi
+  fi
+  if [ -n "${eng_lines// /}" ]; then
+    # shellcheck disable=SC2086
+    if res=$(python3 "$HERE/eng_log.py" $eng_lines 2>>"$LOG"); then
+      log "$res"; msg="${msg:+$msg・}毎日の英語を記録しました"
     else ok=0; fi
   fi
   if [ "$ok" = 1 ]; then status done "${msg:-完了を受け取りました}"

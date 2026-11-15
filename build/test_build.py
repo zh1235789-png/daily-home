@@ -171,6 +171,15 @@ class Scores(unittest.TestCase):
         self.assertEqual((r[1]["total"], r[1]["move"], r[1]["eng"], r[1]["goals"]), (48, 40, 8, "2.5/4"))
         self.assertEqual(r[0]["goals"], "")
 
+    def test_daily_english_column(self):
+        md = """| 週 | 点数 | 運動 | 英語 | 筋トレ | 有酸素 | KB | OET日数 | 毎日の英語 | 抱負 |
+|---|---|---|---|---|---|---|---|---|---|
+| [[2026-11-22\\|11/16〜11/22]] | **70** | 44 | 26 | 3/4 | 4/4 | 4/4 | 4/6 | 18/30 | 3/4 |
+| 11/2〜11/8 <!--2026-11-08--> | **11** | 11 | 0 | 1/4 | 0/4 | 2/4 | 0/6 | — | — |
+"""
+        r = parse_scores(md)
+        self.assertEqual([(x["daily"], x["goals"]) for x in r], [("", ""), ("18/30", "3/4")])
+
     def test_keep_latest(self):
         rows = "".join(f"| [[2026-01-{d:02d}\\\\|w{d}]] | **{d}** | 1 | 1 | a | b | c | d | — |\n" for d in range(1, 13))
         self.assertEqual([x["total"] for x in parse_scores(rows, keep=3)], [10, 11, 12])

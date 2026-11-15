@@ -338,9 +338,12 @@ def parse_scores(md, keep=8):
             total, move, eng = (int(re.sub(r"\D", "", c)) for c in cells[1:4])
         except ValueError:
             continue
+        daily = cells[8] if len(cells) >= 10 else "—"   # 毎日の英語の列（11/16〜）が無い古い表もそのまま読む
+        goals = cells[-1]
         out.append({"week": m.group(1) if m else "", "label": label, "total": total, "move": move, "eng": eng,
                     "gym": cells[4], "cardio": cells[5], "kb": cells[6], "oet": cells[7],
-                    "goals": "" if cells[8] in ("—", "-") else cells[8]})
+                    "daily": "" if daily in ("—", "-") else daily,
+                    "goals": "" if goals in ("—", "-") else goals})
     out.sort(key=lambda x: x["week"])
     return out[-keep:]
 

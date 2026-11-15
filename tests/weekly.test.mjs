@@ -55,3 +55,17 @@ test('週の点数が1週だけなら前週差は出さない', () => {
   const h = app.scoreSec([{ label: '11/9〜11/15', total: 48, move: 40, eng: 8, gym: '', cardio: '', kb: '', oet: '', goals: '' }]);
   assert.doesNotMatch(h, /前週/);
 });
+
+test('毎日の英語のチェックは「e:日付:5桁」でMacへ送る（ENG_DAILYの順・済=1）', () => {
+  const checks = { 'eng:2026-11-16:shunkan': '2026-11-16', 'eng:2026-11-16:speaking': '2026-11-16', 'eng:2026-11-17:listening': '2026-11-17' };
+  assert.equal(app.engMask(checks, '2026-11-16'), '10010');
+  assert.equal(app.engMask(checks, '2026-11-18'), '00000');
+  assert.equal(app.engBody({ '2026-11-17': '00001', '2026-11-16': '10010', bad: '1', '2026-11-18': '12' }), 'e:20261116:10010\ne:20261117:00001');
+  assert.equal(app.engBody({}), '');
+});
+
+test('週の点数に毎日の英語の数を出す（記録が無い週は出さない）', () => {
+  const base = { label: '11/16〜11/22', total: 70, move: 44, eng: 26, gym: '3/4', cardio: '4/4', kb: '4/4', oet: '4/6', goals: '' };
+  assert.match(app.scoreSec([{ ...base, daily: '18/30' }]), /OET 4\/6日・毎日の英語 18\/30/);
+  assert.doesNotMatch(app.scoreSec([{ ...base, daily: '' }]), /毎日の英語/);
+});

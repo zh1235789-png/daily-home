@@ -212,3 +212,9 @@ test('バイク4×4の日はジムのチェックに腹筋を足す（コーチ�
   // 腹筋のメニューが無い古いデータでは出さない
   assert.doesNotMatch(app.trainSec({ ...t, menus: { '1': {}, '2': {} } }, '2026-11-14'), /腹筋/);
 });
+
+test('脚は種目名（1日1種目、2026-11-17〜）でも旧形式A/B/Cでも表示できる', () => {
+  assert.equal(app.legText('レッグカール'), '脚：レッグカール（1種目）');
+  assert.equal(app.legText('B'), '脚B（レッグエクステンション＋レッグカール）');
+  assert.equal(app.legText(null), '脚なし');
+});

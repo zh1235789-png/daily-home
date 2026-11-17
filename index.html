@@ -751,7 +751,8 @@ const GYM_LABEL = { '1': '志村坂上', '2': '本郷' };
 function legText(leg) {
   if (leg === null || leg === undefined) return '脚なし';
   if (leg === '不足時のみ') return '脚は週のセット数が足りないときだけ';
-  return { A: '脚A（レッグプレス／ハックスクワット）', B: '脚B（レッグエクステンション＋レッグカール）', C: '脚C（ブルガリアン優先）' }[leg] || '脚' + leg;
+  // 2026-11-17〜 コーチの leg は種目名（1日1種目）。旧形式のA/B/Cも読めるように残す
+  return { A: '脚A（レッグプレス／ハックスクワット）', B: '脚B（レッグエクステンション＋レッグカール）', C: '脚C（ブルガリアン優先）' }[leg] || '脚：' + leg + '（1種目）';
 }
 function trainLi(id, title, sub) {
   const checked = !!S.checks[id];

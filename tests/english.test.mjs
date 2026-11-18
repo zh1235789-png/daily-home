@@ -38,35 +38,35 @@ test('タブバーに英語タブ・保存したタブ eng を読み戻す', () 
 });
 
 // 2026-11-18：OETメニューのS行（今日の5フレーズ）と毎日の英語の OET Speaking が重なっていた
+// → 毎日の英語を上に置き、Speaking アプリは毎日の英語に残して OET 側の行を出さない
 const speakOet = { date: '2026-11-18', total: '約65分', lead: [], menu: [
   { id: 'oet:l', prio: '🔴1', skill: 'L', text: '再解答', time: '30分' },
   { id: 'oet:s', prio: '🟡3', skill: 'S', text: '**今日の5フレーズ**を全部✓ → アプリで10分', time: '10分' },
 ] };
 
-test('OETメニューに5フレーズのS行がある日は、毎日の英語から OET Speaking を外す', () => {
-  assert.equal(app.oetSpeakId({ oet: speakOet }, '2026-11-18'), 'oet:s');
-  const rt = app.engRoutine('2026-11-18', { oet: speakOet });
-  assert.equal(rt.length, 4);
-  assert.ok(!rt.some(r => r.id === 'eng:2026-11-18:speaking'));
-  assert.equal(app.engRoutine('2026-11-18').length, 5, 'd なし（後片づけ用）は5つ全部');
+test('英語タブは 毎日の英語 → OET → 目標 の順', () => {
   const h = app.engTab({ oet: speakOet }, '2026-11-18');
-  assert.equal((h.match(/今日の5フレーズ/g) || []).length, 2, 'OETのS行と案内の1行だけ（チェック欄は1つ）');
-  assert.doesNotMatch(h, /<b>OET Speaking<\/b>/);
-  assert.match(h, /済 0\/4/);
-  // バッジ：OET 2 ＋ ルーティン 4
+  const a = h.indexOf('📚 毎日の英語'), b = h.indexOf('🎧 OET'), c = h.indexOf('🎯 OET 目標');
+  assert.ok(a >= 0 && a < b && b < c);
+  assert.ok(app.engTab({}, '2026-11-18').indexOf('📚 毎日の英語') < app.engTab({}, '2026-11-18').indexOf('今日のOETノートがまだありません'));
+});
+
+test('OETメニューの5フレーズ／アプリのS行は出さず、毎日の英語の OET Speaking は毎日出す', () => {
+  const h = app.engTab({ oet: speakOet }, '2026-11-18');
+  assert.doesNotMatch(h, /data-id="oet:s"/);
+  assert.match(h, /data-id="oet:l"/);
+  assert.match(h, /data-id="eng:2026-11-18:speaking"/);
+  assert.equal((h.match(/今日の5フレーズ/g) || []).length, 1);
+  assert.match(h, /済 0\/5/);
+  assert.equal(app.engRoutine('2026-11-18').length, 5);
+  // バッジ：OET 1（S行は数えない）＋ ルーティン 5
   assert.equal(app.engLeft({ oet: speakOet }, {}, '2026-11-18'), 6);
+  // 古い日付のノートでも S行は出さない
+  assert.doesNotMatch(app.engTab({ oet: speakOet }, '2026-11-19'), /data-id="oet:s"/);
 });
 
-test('ロールプレイ録音など別のS行の日・古いOETノートの日は、OET Speaking を残す', () => {
+test('ロールプレイ録音など別のS行は OET に残す', () => {
   const rp = { ...speakOet, menu: [{ id: 'oet:r', prio: '🟡3', skill: 'S', text: 'ロールプレイ録音 ×1（Card14）', time: '15分' }] };
-  assert.equal(app.oetSpeakId({ oet: rp }, '2026-11-18'), '');
-  assert.equal(app.engRoutine('2026-11-18', { oet: rp }).length, 5);
-  assert.equal(app.engRoutine('2026-11-19', { oet: speakOet }).length, 5);
-  assert.equal(app.engRoutine('2026-11-18', {}).length, 5);
-});
-
-test('Speaking の記録（週の点数用の5桁）は OET のS行のチェックでも 1 になる', () => {
-  assert.equal(app.engMask({ 'oet:s': '2026-11-18' }, '2026-11-18', 'oet:s'), '00010');
-  assert.equal(app.engMask({}, '2026-11-18', 'oet:s'), '00000');
-  assert.equal(app.engMask({ 'oet:s': '2026-11-18' }, '2026-11-18', ''), '00000');
+  assert.match(app.engTab({ oet: rp }, '2026-11-18'), /data-id="oet:r"/);
+  assert.equal(app.engLeft({ oet: rp }, {}, '2026-11-18'), 6);
 });

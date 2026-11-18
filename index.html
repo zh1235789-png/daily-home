@@ -267,9 +267,8 @@ function doneBody(ids, data) {
     .filter(Boolean).join('\n');
 }
 // 毎日の英語の記録を Mac へ送る行。公開 issue なので「e:日付:5桁の0/1」（ENG_DAILY の順に済=1）だけ（純粋関数）
-// speakId：その日のOETメニューの5フレーズ行（あれば Speaking の済はそちらのチェックで数える）
-function engMask(checks, date, speakId) {
-  return ENG_DAILY.map(r => checks['eng:' + date + ':' + r[0]] || (r[0] === 'speaking' && speakId && checks[speakId]) ? '1' : '0').join('');
+function engMask(checks, date) {
+  return ENG_DAILY.map(r => checks['eng:' + date + ':' + r[0]] ? '1' : '0').join('');
 }
 function engBody(engOut) {
   return Object.keys(engOut || {}).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && /^[01]{5}$/.test(engOut[d])).sort()
@@ -594,34 +593,31 @@ const ENG_DAILY = [
   ['speaking', 'OET Speaking', '今日の5フレーズ'],
   ['listening', 'OET Listening', '通勤リスニング'],
 ];
-// 今日のOETメニューに Speaking の「5フレーズ／アプリ」行があれば、その ID（純粋関数）
-// 同じ作業が2か所に出ないよう、その日は毎日の英語から OET Speaking を外し、OET側のチェックで記録する（2026-11-18）
-// ロールプレイ録音など別の Speaking 作業の日は重ならないので、毎日の英語にも残す
-function oetSpeakId(d, today) {
-  const o = d && d.oet;
-  if (!o || o.date !== today) return '';
-  const m = (o.menu || []).find(x => String(x.skill || '').trim() === 'S' && /5フレーズ|アプリ/.test(x.text || ''));
-  return m ? m.id : '';
+function engRoutine(today) {
+  return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
 }
-// d を渡すと、OETメニューと重なる項目を除いた表示用の一覧（start() の後片づけは d なしで5つ全部を残す）
-function engRoutine(today, d) {
-  const skip = d && oetSpeakId(d, today) ? 'speaking' : '';
-  return ENG_DAILY.filter(r => r[0] !== skip).map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
+// OETメニューの Speaking「5フレーズ／アプリ」行は、毎日の英語の OET Speaking と同じ作業なので出さない（純粋関数）
+// ロールプレイ録音など別の Speaking 作業は残す（2026-11-18）
+function isSpeakApp(m) {
+  return String((m && m.skill) || '').trim() === 'S' && /5フレーズ|アプリ/.test((m && m.text) || '');
+}
+function oetMenu(o) {
+  return ((o && o.menu) || []).filter(m => !isSpeakApp(m));
 }
 // 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
 function engLeft(d, checks, today) {
-  const oet = d && d.oet && d.oet.date === today ? (d.oet.menu || []) : [];
-  return oet.concat(engRoutine(today, d)).filter(x => !checks[x.id]).length;
+  const oet = d && d.oet && d.oet.date === today ? oetMenu(d.oet) : [];
+  return oet.concat(engRoutine(today)).filter(x => !checks[x.id]).length;
 }
+// 並びは 毎日の英語 → OET → 目標（2026-11-18）
 function engTab(d, today) {
-  let h = d.oet ? oetSec(d.oet, today) : sec('🎧 OET', null, '<p class="empty">今日のOETノートがまだありません（毎朝6:30に作成）</p>');
-  const rt = engRoutine(today, d);
-  const viaOet = rt.length < ENG_DAILY.length ? '<p class="lead">🗣 OET Speaking（今日の5フレーズ）は上の 🎧 OET のS行でチェック</p>' : '';
-  h += sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, viaOet + '<ul>' + rt.map(r => {
+  const rt = engRoutine(today);
+  let h = sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, '<ul>' + rt.map(r => {
     const checked = !!S.checks[r.id];
     return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(r.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
       '<div class="body"><div class="txt"><b>' + esc(r.name) + '</b></div><div class="tags"><span>' + esc(r.note) + '</span></div></div></li>';
   }).join('') + '</ul>');
+  h += d.oet ? oetSec(d.oet, today) : sec('🎧 OET', null, '<p class="empty">今日のOETノートがまだありません（毎朝4:45に作成）</p>');
   h += sec('🎯 OET 目標', null, '<p class="lead">受験 <b>2027年1〜2月</b>（未申込）／必要スコア L350・R360・W350・S360</p>');
   return h;
 }
@@ -860,7 +856,7 @@ function oetSec(o, today) {
   let h = '';
   if (stale) h += '<p class="lead">⚠️ ' + esc(o.date || '') + ' のノートです（今日の分はまだ作られていません）</p>';
   h += (o.lead || []).slice(0, 3).map(l => '<p class="lead">' + inline(l) + '</p>').join('');
-  h += '<ul>' + (o.menu || []).map(m => {
+  h += '<ul>' + oetMenu(o).map(m => {
     const checked = !!S.checks[m.id];
     return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(m.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
       '<div class="body"><div class="txt">' + esc(m.prio) + ' <b>' + esc(m.skill) + '</b> ' + inline(m.text) + '</div><div class="tags"><span>' + esc(m.time) + '</span></div></div></li>';
@@ -925,7 +921,7 @@ function queueDone(id, checked) {
 }
 // 毎日の英語は、チェックのたびにその日の5つの状態を送る（外したときも送り直す。Mac は新しい方を採る）
 function queueEng(date) {
-  S.engOut[date] = engMask(S.checks, date, oetSpeakId(DATA, date));
+  S.engOut[date] = engMask(S.checks, date);
   save();
   clearTimeout(flushTimer);
   flushTimer = setTimeout(flushDone, 5000);
@@ -1114,7 +1110,6 @@ function bind() {
     t.closest('li').classList.toggle('done', t.checked);
     if (S.gh && (hubIds(DATA).has(id) || mailHid(DATA, id))) queueDone(id, t.checked);
     if (S.gh && id.indexOf('eng:') === 0) queueEng(id.split(':')[1]);
-    if (S.gh && id && id === oetSpeakId(DATA, todayISO())) queueEng(todayISO()); // 5フレーズ行は Speaking の記録も兼ねる
     if (S.gh && syncable(id, DATA)) queueSync(id);
     updateBar();
     // 英語タブのバッジ（未完了数）を合わせる

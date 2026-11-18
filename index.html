@@ -197,9 +197,9 @@ function loadState() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || '{}');
     if (!s || typeof s !== 'object') throw new Error('bad');
-    return { tab: TABS.indexOf(s.tab) >= 0 ? s.tab : 'home', gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [], engOut: s.engOut && typeof s.engOut === 'object' ? s.engOut : {} };
+    return { tab: TABS.indexOf(s.tab) >= 0 ? s.tab : 'home', gym: s.gym === '2' ? '2' : '1', pass: typeof s.pass === 'string' ? s.pass : '', gh: typeof s.gh === 'string' ? s.gh : '', checks: s.checks && typeof s.checks === 'object' ? s.checks : {}, sent: s.sent && typeof s.sent === 'object' ? s.sent : {}, outbox: Array.isArray(s.outbox) ? s.outbox.filter(x => typeof x === 'string') : [], engOut: s.engOut && typeof s.engOut === 'object' ? s.engOut : {}, sync: s.sync && typeof s.sync === 'object' ? s.sync : {} };
   } catch (e) {
-    return { tab: 'home', gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [], engOut: {} };
+    return { tab: 'home', gym: '1', pass: '', gh: '', checks: {}, sent: {}, outbox: [], engOut: {}, sync: {} };
   }
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* 保存できなくても表示は続ける */ } }
@@ -267,8 +267,9 @@ function doneBody(ids, data) {
     .filter(Boolean).join('\n');
 }
 // 毎日の英語の記録を Mac へ送る行。公開 issue なので「e:日付:5桁の0/1」（ENG_DAILY の順に済=1）だけ（純粋関数）
-function engMask(checks, date) {
-  return ENG_DAILY.map(r => checks['eng:' + date + ':' + r[0]] ? '1' : '0').join('');
+// speakId：その日のOETメニューの5フレーズ行（あれば Speaking の済はそちらのチェックで数える）
+function engMask(checks, date, speakId) {
+  return ENG_DAILY.map(r => checks['eng:' + date + ':' + r[0]] || (r[0] === 'speaking' && speakId && checks[speakId]) ? '1' : '0').join('');
 }
 function engBody(engOut) {
   return Object.keys(engOut || {}).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && /^[01]{5}$/.test(engOut[d])).sort()
@@ -280,6 +281,37 @@ function hubIds(data) {
   const h = (data && data.hub) || {};
   ['week', 'dated', 'big', 'someday'].forEach(k => walk(h[k]));
   return set;
+}
+
+// ---------- 端末間の同期（英語・OET・ラン筋トレ・抱負のチェック） ----------
+// タスクハブとメール以外のチェックは端末の中にしか無く、iPad と iPhone で揃わなかった（2026-11-18）。
+// チェックを変えたら title=done の issue に「k:<ID>=0/1」を載せて Mac へ送る。Mac は issue 番号つきで
+// checks_sync.json に残し、暗号化データ（DATA.sync = {ID: [0/1, issue番号]}）で全端末へ配る。
+// S.sync[ID] は 0=まだ送っていない、n=issue n で送った。配られた番号が自分の番号以上なら、それを採る。
+// 公開 issue に載るので、ID は日付つきの決まった形か、ハッシュ（10桁）だけに限る。
+const SYNC_RE = /^(?:(?:eng|train):\d{4}-\d{2}-\d{2}:[a-z]+|goal:[0-9a-f]{10}|[0-9a-f]{10})$/;
+function syncable(id, data) { return SYNC_RE.test(id) && !hubIds(data).has(id); }
+function syncBody(sync, checks) {
+  return Object.keys(sync || {}).filter(id => sync[id] === 0 && SYNC_RE.test(id)).sort()
+    .map(id => 'k:' + id + '=' + (checks[id] ? '1' : '0')).join('\n');
+}
+// 配られた状態を取り込む。変わったら true（純粋関数ではなく st.checks / st.sync を書き換える）
+function mergeSync(st, server, today) {
+  let changed = false;
+  Object.keys(server || {}).forEach(id => {
+    const v = server[id];
+    if (!SYNC_RE.test(id) || !Array.isArray(v) || typeof v[1] !== 'number') return;
+    const mine = st.sync[id];
+    if (mine === 0) return; // まだ送っていないこの端末の変更が優先
+    if (typeof mine === 'number' && v[1] < mine) return; // この端末が送った変更がまだ配られていない
+    if (v[0]) { if (!st.checks[id]) { st.checks[id] = today; changed = true; } }
+    else if (st.checks[id]) { delete st.checks[id]; changed = true; }
+    st.sync[id] = v[1];
+  });
+  return changed;
+}
+function hasPending() {
+  return S.outbox.length > 0 || Object.keys(S.engOut || {}).length > 0 || Object.keys(S.sync || {}).some(id => S.sync[id] === 0);
 }
 
 // 完了報告の文面。OET・メールは対象外（タスクハブの項目だけ）
@@ -480,7 +512,7 @@ function goalList(data, today) {
   if (!g || !Array.isArray(g.items) || !g.items.length || !g.end || g.end < today) return null;
   return g;
 }
-// チェックはこの端末の中だけ（タスクハブやInboxには送らない）
+// チェックはタスクハブやInboxには送らない（端末間の同期だけ。syncable を参照）
 function goalSec(g, today, checks) {
   const left = g.items.filter(it => !it.done && !checks[it.id]).length;
   const title = (today < g.start ? '🎯 来週の抱負' : '🎯 今週の抱負') + '（' + esc(g.label) + '）';
@@ -562,18 +594,30 @@ const ENG_DAILY = [
   ['speaking', 'OET Speaking', '今日の5フレーズ'],
   ['listening', 'OET Listening', '通勤リスニング'],
 ];
-function engRoutine(today) {
-  return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
+// 今日のOETメニューに Speaking の「5フレーズ／アプリ」行があれば、その ID（純粋関数）
+// 同じ作業が2か所に出ないよう、その日は毎日の英語から OET Speaking を外し、OET側のチェックで記録する（2026-11-18）
+// ロールプレイ録音など別の Speaking 作業の日は重ならないので、毎日の英語にも残す
+function oetSpeakId(d, today) {
+  const o = d && d.oet;
+  if (!o || o.date !== today) return '';
+  const m = (o.menu || []).find(x => String(x.skill || '').trim() === 'S' && /5フレーズ|アプリ/.test(x.text || ''));
+  return m ? m.id : '';
+}
+// d を渡すと、OETメニューと重なる項目を除いた表示用の一覧（start() の後片づけは d なしで5つ全部を残す）
+function engRoutine(today, d) {
+  const skip = d && oetSpeakId(d, today) ? 'speaking' : '';
+  return ENG_DAILY.filter(r => r[0] !== skip).map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
 }
 // 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
 function engLeft(d, checks, today) {
   const oet = d && d.oet && d.oet.date === today ? (d.oet.menu || []) : [];
-  return oet.concat(engRoutine(today)).filter(x => !checks[x.id]).length;
+  return oet.concat(engRoutine(today, d)).filter(x => !checks[x.id]).length;
 }
 function engTab(d, today) {
   let h = d.oet ? oetSec(d.oet, today) : sec('🎧 OET', null, '<p class="empty">今日のOETノートがまだありません（毎朝6:30に作成）</p>');
-  const rt = engRoutine(today);
-  h += sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, '<ul>' + rt.map(r => {
+  const rt = engRoutine(today, d);
+  const viaOet = rt.length < ENG_DAILY.length ? '<p class="lead">🗣 OET Speaking（今日の5フレーズ）は上の 🎧 OET のS行でチェック</p>' : '';
+  h += sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, viaOet + '<ul>' + rt.map(r => {
     const checked = !!S.checks[r.id];
     return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(r.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
       '<div class="body"><div class="txt"><b>' + esc(r.name) + '</b></div><div class="tags"><span>' + esc(r.note) + '</span></div></div></li>';
@@ -873,21 +917,34 @@ function queueDone(id, checked) {
   if (S.outbox.length) {
     R.msg = '⏳ ' + S.outbox.length + '件の完了を数秒後にMacへ送ります（タスクはObsidianへ、メールは以後出さない。取り消すならチェックを外す）'; R.err = false;
     flushTimer = setTimeout(flushDone, 5000);
-  } else if (!checked) { R.msg = ''; }
+  } else {
+    if (!checked) R.msg = '';
+    if (hasPending()) flushTimer = setTimeout(flushDone, 5000); // 英語・同期の送信は取り消さない
+  }
   showMsg();
 }
 // 毎日の英語は、チェックのたびにその日の5つの状態を送る（外したときも送り直す。Mac は新しい方を採る）
 function queueEng(date) {
-  S.engOut[date] = engMask(S.checks, date);
+  S.engOut[date] = engMask(S.checks, date, oetSpeakId(DATA, date));
+  save();
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushDone, 5000);
+}
+// 英語・OET・ラン筋トレ・抱負のチェックをほかの端末へ届ける
+function queueSync(id) {
+  S.sync[id] = 0;
   save();
   clearTimeout(flushTimer);
   flushTimer = setTimeout(flushDone, 5000);
 }
 async function flushDone() {
+  flushTimer = null;
   const ids = S.outbox.slice();
   const eng = Object.assign({}, S.engOut || {});
-  if ((!ids.length && !Object.keys(eng).length) || !S.gh) return;
-  const body = [doneBody(ids, DATA), engBody(eng)].filter(Boolean).join('\n');
+  const snap = {};
+  Object.keys(S.sync).forEach(id => { if (S.sync[id] === 0) snap[id] = !!S.checks[id]; });
+  if ((!ids.length && !Object.keys(eng).length && !Object.keys(snap).length) || !S.gh) return;
+  const body = [doneBody(ids, DATA), engBody(eng), syncBody(S.sync, S.checks)].filter(Boolean).join('\n');
   if (!body) { S.outbox = []; S.engOut = {}; save(); return; } // 送れるIDが無い（データから消えた）
   let res;
   try {
@@ -900,12 +957,13 @@ async function flushDone() {
   if (!res || !res.ok) {
     R.msg = '⚠️ 完了を送れませんでした' + (res ? '（' + res.status + '）' : '（通信を確認）') + '。次にチェックしたときにまとめて送ります'; R.err = true; showMsg(); return;
   }
+  try { R.req = (await res.json()).number; } catch (e) { R.req = 0; }
   S.outbox = S.outbox.filter(x => ids.indexOf(x) < 0);
   ids.forEach(x => { S.sent[x] = todayISO(); });
   // 送っている間に同じ日をまた変えていたら、その日は次に送る
   Object.keys(eng).forEach(d => { if (S.engOut[d] === eng[d]) delete S.engOut[d]; });
+  Object.keys(snap).forEach(id => { if (S.sync[id] === 0 && !!S.checks[id] === snap[id]) S.sync[id] = R.req || 1; });
   save();
-  try { R.req = (await res.json()).number; } catch (e) { R.req = 0; }
   R.pressed = Date.now();
   pollRefresh();
 }
@@ -1011,8 +1069,13 @@ async function start() {
   ((DATA.goals && DATA.goals.items) || []).forEach(g => live.add(g.id));
   trainIds(DATA.training, todayISO()).forEach(id => live.add(id));
   ((DATA.gmail && DATA.gmail.items) || []).forEach(m => live.add('mail:' + m.url));
+  // ほかの端末で付けた・外したチェックを取り込む
+  mergeSync(S, DATA.sync, todayISO());
   Object.keys(S.checks).forEach(k => { if (!live.has(k)) delete S.checks[k]; });
   Object.keys(S.sent).forEach(k => { if (!live.has(k)) delete S.sent[k]; });
+  Object.keys(S.sync).forEach(k => { if (!live.has(k)) delete S.sync[k]; });
+  // 同期を入れる前に付けたチェック（まだ一度も送っていないもの）も送る
+  if (S.gh) Object.keys(S.checks).forEach(k => { if (S.sync[k] === undefined && syncable(k, DATA)) S.sync[k] = 0; });
   save();
   S.outbox = S.outbox.filter(x => live.has(x));
   // メールのチェックは以前は端末の中だけだった：まだ送っていないものも Mac へ送る（以後出さないように）
@@ -1024,7 +1087,7 @@ async function start() {
   document.getElementById('lock').hidden = true;
   document.getElementById('app').hidden = false;
   render();
-  if (S.gh && (S.outbox.length || Object.keys(S.engOut).length) && !flushTimer) flushTimer = setTimeout(flushDone, 1000);
+  if (S.gh && hasPending() && !flushTimer) flushTimer = setTimeout(flushDone, 1000);
 }
 
 function bind() {
@@ -1051,6 +1114,8 @@ function bind() {
     t.closest('li').classList.toggle('done', t.checked);
     if (S.gh && (hubIds(DATA).has(id) || mailHid(DATA, id))) queueDone(id, t.checked);
     if (S.gh && id.indexOf('eng:') === 0) queueEng(id.split(':')[1]);
+    if (S.gh && id && id === oetSpeakId(DATA, todayISO())) queueEng(todayISO()); // 5フレーズ行は Speaking の記録も兼ねる
+    if (S.gh && syncable(id, DATA)) queueSync(id);
     updateBar();
     // 英語タブのバッジ（未完了数）を合わせる
     const nav = document.querySelector('.tabbar');

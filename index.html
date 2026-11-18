@@ -602,10 +602,10 @@ function engExtra(d, today) {
   const ev = ((d && d.calendar && d.calendar.events) || []).find(e => e.date === today && /ははOET/.test(e.title || ''));
   return ev ? [{ id: 'eng:' + today + ':haha', name: '🗣 Speaking 練習', note: 'ははOET' + (ev.time ? ' ' + ev.time + '〜' : '') }] : [];
 }
-// OETメニューの Speaking「5フレーズ／アプリ」行は、毎日の英語の OET Speaking と同じ作業なので出さない（純粋関数）
-// ロールプレイ録音など別の Speaking 作業は残す（2026-11-18）
+// OETメニューの Speaking「5フレーズ／アプリ」「ははOET」の行は、毎日の英語の OET Speaking・🗣 Speaking 練習と
+// 同じ作業なので出さない（純粋関数）。ロールプレイ録音など別の Speaking 作業は残す（2026-11-18）
 function isSpeakApp(m) {
-  return String((m && m.skill) || '').trim() === 'S' && /5フレーズ|アプリ/.test((m && m.text) || '');
+  return String((m && m.skill) || '').trim() === 'S' && /5フレーズ|アプリ|ははOET/.test((m && m.text) || '');
 }
 function oetMenu(o) {
   return ((o && o.menu) || []).filter(m => !isSpeakApp(m));

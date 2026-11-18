@@ -94,6 +94,17 @@ test('「ははOET」の日だけ、毎日の英語の先頭に Speaking 練習�
   assert.equal(app.engLeft({ calendar: hahaCal }, { 'eng:2026-12-22:haha': '2026-12-22' }, '2026-12-22'), 5);
 });
 
+test('OETノートの「ははOET」のS行は OET 欄に出さない（毎日の英語の 🗣 Speaking 練習と重なるため）', () => {
+  const o = { date: '2026-12-22', total: '', lead: [], menu: [
+    { id: 'oet:l', prio: '🔴1', skill: 'L', text: '再解答', time: '30分' },
+    { id: 'oet:h', prio: '🗣', skill: 'S', text: 'ははOET（19:00〜）ロールプレイ練習 → 録音を採点に出す', time: '60分' },
+  ] };
+  const h = app.engTab({ oet: o, calendar: hahaCal }, '2026-12-22');
+  assert.doesNotMatch(h, /data-id="oet:h"/);
+  assert.match(h, /data-id="eng:2026-12-22:haha"/);
+  assert.equal(app.engLeft({ oet: o, calendar: hahaCal }, {}, '2026-12-22'), 7);
+});
+
 test('Speaking 練習のチェックは週の点数の5桁に入れず、開き直しても消えない（後片づけの一覧に入っている）', () => {
   assert.equal(app.engMask({ 'eng:2026-12-22:haha': '2026-12-22' }, '2026-12-22'), '00000');
   const src = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');

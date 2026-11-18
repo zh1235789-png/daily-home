@@ -83,6 +83,8 @@ task_ids=$(printf '%s\n' "$done_body" | grep -oE '(^|[^a-z])id:[0-9a-f]{10}' | g
 mail_ids=$(printf '%s\n' "$done_body" | grep -oE 'mail:[0-9a-f]{10}' | cut -c6- | sort -u | tr '\n' ' ')
 # 毎日の英語の記録「e:日付:5桁」。新しい issue が先に来る順のまま渡す（同じ日は先の方を採る）
 eng_lines=$(printf '%s\n' "$done_body" | { grep -oE '^e:[0-9]{8}:[01]{5}$' || true; } | tr '\n' ' ')
+# 英語・OET・ラン筋トレ・抱負のチェック「k:<ID>=0/1」。端末間で揃えるので issue 番号を付けて渡す（新しい方を採る）
+sync_lines=$(printf '%s' "$open_json" | jq -r '.[] | select(.title == "done") | .number as $n | (.body // "") | split("\n")[] | select(test("^k:[a-z0-9:-]+=[01]$")) | "\($n) \(.)"' 2>>"$LOG" || true)
 ids="$done_ids $refresh_ids"
 [ -z "${ids// /}" ] && exit 0
 
@@ -96,7 +98,7 @@ fi
 trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 for n in $ids; do gh api -X PATCH "repos/$REPO_SLUG/issues/$n" -f state=closed -f state_reason=completed >/dev/null 2>>"$LOG"; done
-log "requested: done=[$done_ids] tasks=[$task_ids] mails=[$mail_ids] eng=[$eng_lines] refresh=[$refresh_ids]"
+log "requested: done=[$done_ids] tasks=[$task_ids] mails=[$mail_ids] eng=[$eng_lines] sync=[$(printf '%s' "$sync_lines" | grep -c . || true)] refresh=[$refresh_ids]"
 
 # 0) 完了の反映（Claude 不要・数秒）
 if [ -n "${done_ids// /}" ]; then
@@ -122,6 +124,11 @@ if [ -n "${done_ids// /}" ]; then
     # shellcheck disable=SC2086
     if res=$(python3 "$HERE/eng_log.py" $eng_lines 2>>"$LOG"); then
       log "$res"; msg="${msg:+$msg・}毎日の英語を記録しました"
+    else ok=0; fi
+  fi
+  if [ -n "$sync_lines" ]; then
+    if res=$(printf '%s\n' "$sync_lines" | python3 "$HERE/sync_checks.py" 2>>"$LOG"); then
+      log "$res"; msg="${msg:+$msg・}チェックをほかの端末へ配ります"
     else ok=0; fi
   fi
   if [ "$ok" = 1 ]; then status done "${msg:-完了を受け取りました}"
@@ -157,6 +164,8 @@ yt_out="$(python3 "$HERE/youtube_fetch.py" --pending 2>&1)"
 prompt="$prompt
 
 （このコマンドライン実行では手順4の publish.sh は実行しない。JSONを書いたら報告して終わる。公開は呼び出し側が行う。
+この実行で使えるのは Read・WebSearch・上のMCPツールと、4つのJSONへの Edit だけ。Bash・chmod・Write・/tmp やスクリプトファイルの作成は使えないので試さない。
+4ファイルは Edit で中身を書き換える（権限600は既存ファイルのまま保たれる）。JSONの構文チェック・権限600の確認・公開は呼び出し側が後で行うので、報告で未完了に挙げない。
 手順3の取得スクリプトは呼び出し側で実行済み。その出力:
 $yt_out
 ）"
@@ -168,7 +177,17 @@ claude -p "$prompt" --model sonnet --add-dir "$CONF" --add-dir "$FIN" \
   --allowedTools Read WebSearch "Edit(~/.config/daily-home/calendar.json)" "Edit(~/.config/daily-home/gmail.json)" "Edit(~/.config/daily-home/youtube.json)" "Edit(~/.config/daily-home/picks.json)" $tools \
   >>"$LOG" 2>&1
 after="$(stat -f %m "$CONF/gmail.json" "$CONF/calendar.json" 2>/dev/null | tr '\n' ' ')"
-if [ "$before" != "$after" ]; then
+# Claude には Bash を渡していないので、権限600と JSON の構文はここで確かめる
+broken=""
+for f in calendar gmail youtube picks; do
+  [ -f "$CONF/$f.json" ] || continue
+  chmod 600 "$CONF/$f.json"
+  python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$CONF/$f.json" 2>/dev/null || broken="$broken $f.json"
+done
+if [ -n "$broken" ]; then
+  log "JSON broken:$broken"
+  status error "書き出したJSONが壊れています:$broken（Macのログを確認）"
+elif [ "$before" != "$after" ]; then
   status done "更新しました"
 else
   status error "メールと予定の取得に失敗しました（Macのログを確認）"

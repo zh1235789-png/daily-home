@@ -450,6 +450,12 @@ def load_json(path, default):
         return default
 
 
+def load_sync(path):
+    from sync_checks import published
+    raw = load_json(path, {})
+    return published(raw if isinstance(raw, dict) else {})
+
+
 def build(today=None):
     now = dt.datetime.now(dt.timezone(dt.timedelta(hours=9)))
     today = today or now.date()
@@ -467,6 +473,8 @@ def build(today=None):
         "youtube": load_youtube(CONF / "youtube.json"),
         "stocks": load_stocks(CONF / "stocks.json"),
         "picks": load_picks(CONF / "picks.json"),
+        # 英語・OET・ラン筋トレ・抱負のチェック（端末間で揃える。build/sync_checks.py が書く）
+        "sync": load_sync(CONF / "checks_sync.json"),
     }
     return data
 

@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { loadApp } from './harness.mjs';
 
@@ -69,4 +70,32 @@ test('ロールプレイ録音など別のS行は OET に残す', () => {
   const rp = { ...speakOet, menu: [{ id: 'oet:r', prio: '🟡3', skill: 'S', text: 'ロールプレイ録音 ×1（Card14）', time: '15分' }] };
   assert.match(app.engTab({ oet: rp }, '2026-11-18'), /data-id="oet:r"/);
   assert.equal(app.engLeft({ oet: rp }, {}, '2026-11-18'), 6);
+});
+
+// 2026-11-18：カレンダーに「ははOET」がある日は Speaking 練習の日
+const hahaCal = { events: [
+  { date: '2026-12-22', time: '19:00', title: 'ははOET' },
+  { date: '2026-12-23', time: '', title: '⏰ 何かの締切' },
+] };
+
+test('「ははOET」の日だけ、毎日の英語の先頭に Speaking 練習が出る', () => {
+  const x = app.engExtra({ calendar: hahaCal }, '2026-12-22');
+  assert.equal(x.length, 1);
+  assert.equal(x[0].id, 'eng:2026-12-22:haha');
+  assert.equal(x[0].note, 'ははOET 19:00〜');
+  assert.equal(app.engExtra({ calendar: hahaCal }, '2026-12-23').length, 0);
+  assert.equal(app.engExtra({}, '2026-12-22').length, 0);
+  const h = app.engTab({ calendar: hahaCal }, '2026-12-22');
+  assert.match(h, /data-id="eng:2026-12-22:haha"/);
+  assert.match(h, /済 0\/6/);
+  assert.ok(h.indexOf('Speaking 練習') < h.indexOf('Abceed 瞬間英作文'));
+  assert.doesNotMatch(app.engTab({ calendar: hahaCal }, '2026-12-23'), /Speaking 練習/);
+  assert.equal(app.engLeft({ calendar: hahaCal }, {}, '2026-12-22'), 6);
+  assert.equal(app.engLeft({ calendar: hahaCal }, { 'eng:2026-12-22:haha': '2026-12-22' }, '2026-12-22'), 5);
+});
+
+test('Speaking 練習のチェックは週の点数の5桁に入れず、開き直しても消えない（後片づけの一覧に入っている）', () => {
+  assert.equal(app.engMask({ 'eng:2026-12-22:haha': '2026-12-22' }, '2026-12-22'), '00000');
+  const src = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(src, /engExtra\(DATA, todayISO\(\)\)\.concat\(engRoutine\(todayISO\(\)\)\)\.forEach\(r => live\.add\(r\.id\)\)/);
 });

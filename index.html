@@ -596,6 +596,12 @@ const ENG_DAILY = [
 function engRoutine(today) {
   return ENG_DAILY.map(r => ({ id: 'eng:' + today + ':' + r[0], name: r[1], note: r[2] }));
 }
+// カレンダーに「ははOET」がある日は Speaking 練習の日。毎日の英語にその日だけ1つ足す（純粋関数、2026-11-18）
+// 週の点数の5桁（engMask）には入れない。start() の後片づけでも残すこと
+function engExtra(d, today) {
+  const ev = ((d && d.calendar && d.calendar.events) || []).find(e => e.date === today && /ははOET/.test(e.title || ''));
+  return ev ? [{ id: 'eng:' + today + ':haha', name: '🗣 Speaking 練習', note: 'ははOET' + (ev.time ? ' ' + ev.time + '〜' : '') }] : [];
+}
 // OETメニューの Speaking「5フレーズ／アプリ」行は、毎日の英語の OET Speaking と同じ作業なので出さない（純粋関数）
 // ロールプレイ録音など別の Speaking 作業は残す（2026-11-18）
 function isSpeakApp(m) {
@@ -607,11 +613,11 @@ function oetMenu(o) {
 // 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
 function engLeft(d, checks, today) {
   const oet = d && d.oet && d.oet.date === today ? oetMenu(d.oet) : [];
-  return oet.concat(engRoutine(today)).filter(x => !checks[x.id]).length;
+  return oet.concat(engExtra(d, today), engRoutine(today)).filter(x => !checks[x.id]).length;
 }
 // 並びは 毎日の英語 → OET → 目標（2026-11-18）
 function engTab(d, today) {
-  const rt = engRoutine(today);
+  const rt = engExtra(d, today).concat(engRoutine(today));
   let h = sec('📚 毎日の英語', '済 ' + rt.filter(r => S.checks[r.id]).length + '/' + rt.length, '<ul>' + rt.map(r => {
     const checked = !!S.checks[r.id];
     return '<li class="task' + (checked ? ' done' : '') + '"><input type="checkbox" data-id="' + esc(r.id) + '"' + (checked ? ' checked' : '') + ' aria-label="完了">' +
@@ -1061,7 +1067,7 @@ async function start() {
   const walk = (arr) => (arr || []).forEach(it => { live.add(it.id); walk(it.children); });
   ['week', 'dated', 'big', 'someday'].forEach(k => walk(DATA.hub[k]));
   ((DATA.oet && DATA.oet.menu) || []).forEach(m => live.add(m.id));
-  engRoutine(todayISO()).forEach(r => live.add(r.id));
+  engExtra(DATA, todayISO()).concat(engRoutine(todayISO())).forEach(r => live.add(r.id));
   ((DATA.goals && DATA.goals.items) || []).forEach(g => live.add(g.id));
   trainIds(DATA.training, todayISO()).forEach(id => live.add(id));
   ((DATA.gmail && DATA.gmail.items) || []).forEach(m => live.add('mail:' + m.url));

@@ -157,3 +157,16 @@ test('自動作業：今日と昨日の記録だけを出し、要約・ノー�
   assert.equal((html.match(/class="note"/g) || []).length, 2);
   assert.equal(norm(app.routineList({}, '2026-10-21')).length, 0);
 });
+
+test('自動作業：成果物ノートが複数あれば全部リンクする（医学ノートの台帳と提案）', () => {
+  const runs = [{ id: 'r1', date: '2026-11-19', time: '05:35', name: '医学ノートの見直し', headline: '10本見直し', lines: [],
+    note: '2026-11-19_医学ノートの見直し', output: '医学ノート更新台帳', outputs: ['医学ノート更新台帳', '医学ノート更新_提案'] }];
+  const html = app.routineSec(runs, '2026-11-19');
+  assert.match(html, new RegExp('file=' + encodeURIComponent('医学ノート更新台帳') + '"'));
+  assert.match(html, new RegExp('file=' + encodeURIComponent('医学ノート更新_提案') + '"'));
+  assert.doesNotMatch(html, new RegExp('file=' + encodeURIComponent('2026-11-19_医学ノートの見直し')));
+  assert.equal((html.match(/class="note"/g) || []).length, 2);
+  // outputs の無い古いデータは output 1つだけ
+  const old = app.routineSec([{ ...runs[0], outputs: undefined }], '2026-11-19');
+  assert.equal((old.match(/class="note"/g) || []).length, 1);
+});

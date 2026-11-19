@@ -533,9 +533,10 @@ function routineSec(runs, today) {
   const h = '<ul>' + runs.map(r => {
     const when = (r.date === today ? '今日' : '昨日') + (r.time ? ' ' + r.time : '');
     const lines = r.headline ? [r.headline] : (r.lines || []);
-    // 本文（成果物）ノートがあればそれだけ。無いルーティンは実行記録ノートを出す
-    const link = r.output || r.note;
-    const tags = link ? [noteLink(link)] : [];
+    // 本文（成果物）ノートがあればそれだけ（複数可）。無いルーティンは実行記録ノートを出す
+    const outs = (r.outputs && r.outputs.length) ? r.outputs : (r.output ? [r.output] : []);
+    const links = outs.length ? outs : (r.note ? [r.note] : []);
+    const tags = links.map(noteLink);
     return '<li class="task routine"><div class="body"><div class="from">' + esc(when) + '</div>' +
       '<div class="txt"><b>' + esc(r.name) + '</b></div>' +
       lines.map(l => '<div class="rl">' + inline(l) + '</div>').join('') +

@@ -65,10 +65,22 @@ class Routines(unittest.TestCase):
         self.assertEqual([x["date"] for x in r], ["2026-10-20", "2026-10-19"])
         self.assertEqual(r[0]["headline"], "3件: THOR-2続報など")
         self.assertEqual(r[0]["output"], "泌尿器科アップデート_2026-10-20")
+        self.assertEqual(r[0]["outputs"], ["泌尿器科アップデート_2026-10-20"])
+        self.assertEqual(r[1]["outputs"], [])
         self.assertEqual(r[0]["time"], "09:12")
         self.assertEqual(r[0]["lines"], [])
         self.assertEqual(r[1]["name"], "iCloud月次ファイル整理")
         self.assertEqual(r[1]["lines"], ["✅ 移動したファイル", "なし"])
+
+    def test_several_outputs_split_by_bar(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            (p / "2026-10-20_医学ノートの見直し.md").write_text(
+                '---\ndate: 2026-10-20\nroutine: 医学ノートの見直し\ntime: "05:35"\n'
+                'output: "医学ノート更新台帳| 医学ノート更新_提案 |"\ntags:\n  - claude-routine\n---\n\n本文\n')
+            r = parse_routines(p, T)
+        self.assertEqual(r[0]["outputs"], ["医学ノート更新台帳", "医学ノート更新_提案"])
+        self.assertEqual(r[0]["output"], "医学ノート更新台帳")
 
     def test_missing_folder(self):
         self.assertEqual(parse_routines(Path("/nonexistent/x"), T), [])

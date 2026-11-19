@@ -244,6 +244,8 @@ def parse_routine_note(md, stem):
     name = _fm_value(fm, "routine") or stem[11:]
     body = re.sub(r"^# .*$", "", body, count=1, flags=re.M)
     headline = _fm_value(fm, "headline")
+    # 成果物ノートは「|」区切りで複数書ける（例: 医学ノート更新台帳|医学ノート更新_提案）
+    outputs = [s.strip() for s in _fm_value(fm, "output").split("|") if s.strip()]
     return {
         "id": item_id("routine", stem),
         "date": date,
@@ -252,7 +254,8 @@ def parse_routine_note(md, stem):
         "headline": headline,
         "lines": [] if headline else summary_lines(body),
         "note": stem,
-        "output": _fm_value(fm, "output"),
+        "output": outputs[0] if outputs else "",
+        "outputs": outputs,
     }
 
 

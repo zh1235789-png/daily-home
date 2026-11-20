@@ -608,8 +608,18 @@ function engExtra(d, today) {
 function isSpeakApp(m) {
   return String((m && m.skill) || '').trim() === 'S' && /5フレーズ|アプリ|ははOET/.test((m && m.text) || '');
 }
+// Reading の「通勤ドリル」も毎日の英語の OET Reading と同じ作業。ドリルだけの R 行は出さず、
+// 「模試 … ＋ 通勤ドリル …」の行は模試の部分だけ残す（純粋関数、2026-11-20）
+const DRILL_RE = /\s*[＋+]\s*通勤ドリル[^＋+]*/;
+function isReadDrill(m) {
+  return String((m && m.skill) || '').trim() === 'R' && /通勤ドリル/.test((m && m.text) || '') && !/模試/.test(m.text.replace(/（[^）]*）/g, ''));
+}
+function dropDrill(m) {
+  if (String(m.skill || '').trim() !== 'R' || !DRILL_RE.test(m.text || '')) return m;
+  return Object.assign({}, m, { text: m.text.replace(DRILL_RE, ''), time: String(m.time || '').replace(/\s*[＋+]\s*10分$/, '') });
+}
 function oetMenu(o) {
-  return ((o && o.menu) || []).filter(m => !isSpeakApp(m));
+  return ((o && o.menu) || []).filter(m => !isSpeakApp(m) && !isReadDrill(m)).map(dropDrill);
 }
 // 英語タブのバッジ：今日のOETメニューとルーティンのうち未チェックの数（純粋関数）
 function engLeft(d, checks, today) {

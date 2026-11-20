@@ -110,3 +110,39 @@ test('Speaking 練習のチェックは週の点数の5桁に入れず、開き�
   const src = fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(src, /engExtra\(DATA, todayISO\(\)\)\.concat\(engRoutine\(todayISO\(\)\)\)\.forEach\(r => live\.add\(r\.id\)\)/);
 });
+
+// 2026-11-20：OETメニューのR行「通勤ドリル」と毎日の英語の OET Reading（通勤ドリル）が重なっていた
+// → 毎日の英語に残し、OET 側からは通勤ドリルを外す（模試は OET に残す）
+const readOet = (rows) => ({ date: '2026-11-20', total: '約50分', lead: [], menu: [
+  { id: 'oet:l', prio: '🔴1', skill: 'L', text: '再解答', time: '30分' },
+].concat(rows) });
+
+test('OETメニューの通勤ドリルだけのR行は出さず、毎日の英語の OET Reading は出す', () => {
+  const o = readOet([{ id: 'oet:d', prio: '🟠2', skill: 'R', text: '通勤ドリル B 2問・C 3問（模試は次の水・土）', time: '10分' }]);
+  const h = app.engTab({ oet: o }, '2026-11-20');
+  assert.doesNotMatch(h, /data-id="oet:d"/);
+  assert.match(h, /data-id="oet:l"/);
+  assert.match(h, /data-id="eng:2026-11-20:reading"/);
+  assert.equal((h.match(/通勤ドリル/g) || []).length, 1);
+  // バッジ：OET 1（ドリル行は数えない）＋ ルーティン 5
+  assert.equal(app.engLeft({ oet: o }, {}, '2026-11-20'), 6);
+});
+
+test('模試＋通勤ドリルのR行は模試だけ残す（チェックのIDは変えない）', () => {
+  const o = readOet([{ id: 'oet:m', prio: '🟠2', skill: 'R', text: '模試 **Official02 Part A**（破傷風・20問・15分通し）→ 今日中に採点へ ＋ 通勤ドリル B 2問・C 3問', time: '15分＋採点＋10分' }]);
+  const h = app.engTab({ oet: o }, '2026-11-20');
+  assert.match(h, /data-id="oet:m"/);
+  assert.match(h, /<b>Official02 Part A<\/b>（破傷風・20問・15分通し）→ 今日中に採点へ<\/div>/);
+  assert.match(h, /<span>15分＋採点<\/span>/);
+  assert.equal((h.match(/通勤ドリル/g) || []).length, 1);
+  assert.equal(app.engLeft({ oet: o }, {}, '2026-11-20'), 7);
+  assert.equal(app.engLeft({ oet: o }, { 'oet:m': '2026-11-20' }, '2026-11-20'), 6);
+});
+
+test('模試だけのR行はそのまま残す', () => {
+  const o = readOet([{ id: 'oet:c', prio: '🟠2', skill: 'R', text: '模試 **Official01 Part C Text 2**（Medication non-compliance・8問）→ 今日中に採点へ', time: '約22分' }]);
+  const h = app.engTab({ oet: o }, '2026-11-20');
+  assert.match(h, /data-id="oet:c"/);
+  assert.match(h, /Medication non-compliance/);
+  assert.match(h, /<span>約22分<\/span>/);
+});

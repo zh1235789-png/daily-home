@@ -4,9 +4,18 @@ import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import tempfile
-from build import load_goals, parse_goals_note, parse_scores, load_picks, load_stocks, load_youtube, parse_due, parse_hub, parse_routines
+from build import load_goals, parse_goals_note, parse_scores, load_picks, load_stocks, load_youtube, parse_due, parse_hub, parse_routines, parse_oet_note
 
 T = dt.date(2026, 10, 20)
+
+
+
+class OetLead(unittest.TestCase):
+    # 2026-11-20: ノートの入れ替え時刻が4:45に変わり、案内文が英語タブに出ていた
+    def test_housekeeping_line_hidden(self):
+        md = ("date: 2026-11-20\n# t\n> 📌 このノートは毎朝4:45に入れ替わる。前日の分は移る。\n"
+              "> 受験は2027年。\n> 📌 このノートは毎朝6:30に入れ替わる。\n## ✅ 今日のメニュー（約50分）\n")
+        self.assertEqual(parse_oet_note(md)["lead"], ["受験は2027年。"])
 
 
 class Due(unittest.TestCase):

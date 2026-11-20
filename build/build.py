@@ -200,7 +200,7 @@ def parse_oet_note(md):
     lead = []
     top = md.split("## ✅ 今日のメニュー")[0]
     for line in top.splitlines():
-        if line.startswith("> ") and "毎朝6:30" not in line:
+        if line.startswith("> ") and not re.search(r"このノートは毎朝|毎朝\d{1,2}:\d{2}に入れ替わる", line):
             lead.append(line[2:].strip())
     record = parse_checklist(section(md, "📝 終わったら記録"), "oet-rec:" + (date or ""))
     return {"date": date, "title": title, "total": total, "lead": lead,

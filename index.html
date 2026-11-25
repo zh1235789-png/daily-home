@@ -643,7 +643,12 @@ function engTab(d, today) {
 // trainSec が描くチェックと必ずそろえる。ここに無い ID のチェックは start() が「消えた項目」として捨てる（2026-11-12 修正）
 function trainIds(training, today) {
   const slot = trainingFor(training, today);
-  if (!slot) return offDayFor(training, today) ? ['train:' + today + ':walk', 'train:' + today + ':kb'] : [];
+  if (!slot) {
+    const off = offDayFor(training, today);
+    if (!off) return [];
+    // 2026-11-25〜 月・木は完全休養（run が「なし」、kb が null）なのでチェック項目なし
+    return (off.run && !/^なし/.test(off.run) ? ['train:' + today + ':walk'] : []).concat(off.kb ? ['train:' + today + ':kb'] : []);
+  }
   return (/^なし/.test(slot.run) ? [] : ['train:' + today + ':run']).concat(slot.kb ? ['train:' + today + ':kb'] : [], ['train:' + today + ':gym']);
 }
 function trainLeft(d, checks, today) {
@@ -687,7 +692,7 @@ function weekPlanSec(training, today) {
   }
   let h = '<table class="wt"><thead><tr><th></th><th>🏃 ラン</th><th>🏋️ 筋トレ</th><th>🔔 ケトルベル</th></tr></thead><tbody>' + rows + '</tbody></table>';
   const kb = training.kbMenus;
-  if (kb) h += '<details class="kbm"><summary>🔔 ケトルベルのメニュー</summary>' + Object.values(kb).map(m =>
+  if (kb) h += '<details class="kbm"><summary>🔔 ケトルベルのメニュー</summary>' + Object.values(kb).filter(m => !m.retired).map(m =>
     '<b>' + esc(m.label) + '</b><ul>' + m.items.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>').join('') +
     '<p class="sub" style="margin:4px 0 0">ランの日はランの後に。翌朝ハムの張りが残っていたら軽めにする</p></details>';
   return sec('📅 今週の運動', null, h);
@@ -804,6 +809,13 @@ function offDayFor(training, iso) {
   const over = (o.byDay || {})[dow];
   return over ? Object.assign({}, o, over) : o;
 }
+// 明日が月・木のときの1行（完全休養の日と、朝メニューがある古いデータの両方）（純粋関数）
+function offDayText(o) {
+  if (!o.kb && /^なし/.test(o.run || '')) return esc(o.focus || '完全休養（手術日）');
+  return 'ジムなし（手術日）・' + esc(o.runShort || '朝ウォーキング') + '＋ケトルベル' + esc(o.kbShort || '体幹');
+}
+// 必須種目に「×Nセット」を付ける（コーチの DAY_MENUS の sets、2026-11-25〜。無い古いデータは名前だけ）（純粋関数）
+function mustWithSets(m) { return m.must.map((n, i) => m.sets && m.sets[i] ? n + ' ×' + m.sets[i] + 'セット' : n); }
 const GYM_LABEL = { '1': '志村坂上', '2': '本郷' };
 function legText(leg) {
   if (leg === null || leg === undefined) return '脚なし';
@@ -821,9 +833,12 @@ function trainSec(training, today) {
   const next = trainingFor(training, addDays(today, 1));
   const tmr = '<p class="sub" style="margin:8px 0 0">明日（' + wd(addDays(today, 1)) + '）: ' +
     (next ? esc(next.focus) + '・' + esc(legText(next.leg).replace(/（.*）/, '')) + ' / ' + esc(next.run.replace(/（.*）/, ''))
-      : offDayFor(training, addDays(today, 1)) ? 'ジムなし（手術日）・' + esc(offDayFor(training, addDays(today, 1)).runShort || '朝ウォーキング') + '＋ケトルベル' + esc(offDayFor(training, addDays(today, 1)).kbShort || '体幹')
+      : offDayFor(training, addDays(today, 1)) ? offDayText(offDayFor(training, addDays(today, 1)))
       : '休み（手術日・散歩のみ）') + '</p>';
   const off = offDayFor(training, today);
+  if (!slot && off && !off.kb && /^なし/.test(off.run || '')) {
+    return sec('🏃 ラン・筋トレ', null, '<p class="empty">今日は' + esc(off.focus || '完全休養（手術日）') + '。ジム・ラン・ケトルベルなし</p>' + (off.note ? '<div class="tags"><span>※ ' + esc(off.note) + '</span></div>' : '') + tmr, 'train');
+  }
   if (!slot && off) {
     const kbm = (training.kbMenus || {})[off.kbLevel];
     let kb = kbm ? '<ol>' + kbm.items.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>' : '<div class="sub">' + esc(off.kb || '') + '</div>';
@@ -842,7 +857,7 @@ function trainSec(training, today) {
     (bike ? '数値は筋トレAIコーチの「有酸素運動を記録 → バイク4×4」に' : 'Garminコーチの今日のワークアウトに従う。インターバルは最大の8〜9割') + '</span></div>');
   let gym = '<div class="sub">' + esc(legText(slot.leg)) + '</div>';
   if (m) {
-    gym += '<ol>' + m.must.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
+    gym += '<ol>' + mustWithSets(m).map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
     if (m.optional && m.optional.length) gym += '<div class="sub" style="margin-top:4px">余裕があれば</div><ol class="opt">' + m.optional.map(n => '<li>' + esc(n) + '</li>').join('') + '</ol>';
   }
   // バイク4×4の日はバイクのあとにジムで腹筋（コーチの WEEK_PLAN の abs と DAY_MENUS の abs、2026-11-14〜）

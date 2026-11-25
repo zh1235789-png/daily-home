@@ -218,3 +218,23 @@ test('脚は種目名（1日1種目、2026-11-17〜）でも旧形式A/B/Cでも
   assert.equal(app.legText('B'), '脚B（レッグエクステンション＋レッグカール）');
   assert.equal(app.legText(null), '脚なし');
 });
+
+test('本物のコーチ（2026-11-25〜）: 月・木は完全休養でチェックなし、ほかの曜日もチェックと画面が一致し、必須にセット数が付く', { skip: !existsSync(join(homedir(), 'workout-ai-coach/index.html')) }, () => {
+  const t = JSON.parse(execFileSync('node', [new URL('../build/extract_training.mjs', import.meta.url).pathname, join(homedir(), 'workout-ai-coach/index.html')], { encoding: 'utf8' }));
+  if (!t.offDay || t.offDay.kb) return;   // コーチがまだ古い予定なら確かめない
+  for (const day of ['2026-11-30', '2026-12-03']) {   // 月・木
+    assert.deepEqual(norm(app.trainIds(t, day)), [], day);
+    const h = app.trainSec(t, day);
+    assert.match(h, /完全休養/, day);
+    assert.doesNotMatch(h, /data-id=/, day);
+  }
+  for (let i = 0; i < 14; i++) {
+    const day = app.addDays('2026-11-30', i);
+    const shown = [...app.trainSec(t, day).matchAll(/data-id="([^"]+)"/g)].map(m => m[1]).sort();
+    assert.deepEqual(norm(app.trainIds(t, day)).slice().sort(), shown, day);
+  }
+  assert.match(app.trainSec(t, '2026-12-01'), /×4セット/);   // 火の必須
+  assert.match(app.trainSec(t, '2026-11-29'), /明日（月）: 完全休養（手術日）/);
+  const week = app.weekPlanSec(t, '2026-12-01');
+  assert.doesNotMatch(week, /体幹・瞬発（旧/);
+});

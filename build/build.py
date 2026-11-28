@@ -419,6 +419,26 @@ def load_picks(path):
     return {"updated": data.get("updated"), "asof": data.get("asof"), "note": data.get("note"), "picks": picks, "sources": sources}
 
 
+# ---------- セール情報（Google AI Pro など） ----------
+
+SALE_STATUS = ("sale", "none", "unknown")
+
+
+def load_sales(path):
+    """daily-home-refresh（朝夕）が書く sale.json。壊れていれば None（ページ側は欄を出さない）。"""
+    data = load_json(path, None)
+    if not isinstance(data, dict) or not isinstance(data.get("items"), list):
+        return None
+    items = []
+    for it in data["items"]:
+        if not isinstance(it, dict) or not it.get("name") or it.get("status") not in SALE_STATUS:
+            continue
+        it = dict(it)
+        it["sources"] = [x for x in it.get("sources") or [] if isinstance(x, dict) and str(x.get("url", "")).startswith("https://")][:5]
+        items.append(it)
+    return {"updated": data.get("updated"), "items": items}
+
+
 # ---------- 組み立て・暗号化 ----------
 
 def mail_thread(url):
@@ -476,6 +496,7 @@ def build(today=None):
         "youtube": load_youtube(CONF / "youtube.json"),
         "stocks": load_stocks(CONF / "stocks.json"),
         "picks": load_picks(CONF / "picks.json"),
+        "sales": load_sales(CONF / "sale.json"),
         # 英語・OET・ラン筋トレ・抱負のチェック（端末間で揃える。build/sync_checks.py が書く）
         "sync": load_sync(CONF / "checks_sync.json"),
     }

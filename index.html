@@ -41,6 +41,7 @@ h1 { font-size: 24px; margin: 0; letter-spacing: .02em; }
 .pill.amber { background: var(--amber-bg); color: var(--amber); font-weight: 600; }
 section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin: 0 0 12px; padding: 12px 14px; }
 section.red { border-color: var(--red); }
+section.amber { border-color: var(--amber); }
 h2 { font-size: 14px; margin: 0 0 6px; display: flex; align-items: center; gap: 6px; }
 h2 .n { color: var(--sub); font-weight: 400; }
 details > summary { cursor: pointer; list-style: none; }
@@ -412,6 +413,8 @@ function render() {
   h += sec('✉️ 対応が必要なメール', mailOpen.length,
     mails.length ? '<ul>' + mails.map(m => mailLi(m)).join('') + '</ul>' : '<p class="empty">要対応のメールはありません</p>');
 
+  if (d.sales && (d.sales.items || []).length) h += saleSec(d.sales, today);
+
   const scores = (d.scores || []).filter(x => x && typeof x.total === 'number');
   if (scores.length) h += scoreSec(scores);
   const goals = goalList(d, today);
@@ -567,6 +570,28 @@ function ytSec(list, today) {
   let h = fresh.length ? '<ul>' + fresh.map(v => ytItem(v, today)).join('') + '</ul>' : '<p class="empty">昨日・今日の新着はありません</p>';
   if (older.length) h += '<details><summary class="day">それより前（' + older.length + '本）▸</summary><ul>' + older.map(v => ytItem(v, today)).join('') + '</ul></details>';
   return sec('📺 花子の米国株（新着）', fresh.length, h);
+}
+// ---------- セール情報（Google AI Pro など。朝夕に Claude が公式ページを確認） ----------
+// セール中のものを上に。件数はセール中の数（純粋関数、2026-11-28）
+const SALE_LABEL = { sale: ['🔥 セール中', 'amber'], none: ['セールなし', ''], unknown: ['確認できず', 'red'] };
+function saleItem(it, today) {
+  const lb = SALE_LABEL[it.status] || ['', ''];
+  const left = it.until ? Math.round((Date.parse(it.until) - Date.parse(today)) / 86400000) : null;
+  const src = (it.sources || []).filter(x => /^https:\/\//.test(x.url || ''));
+  return '<li class="task sale"><div class="body"><div class="from">' +
+    (it.checked ? esc(String(it.checked).slice(5, 16).replace('T', ' ')) + ' 確認' : '') + '</div>' +
+    '<div class="txt"><b>' + esc(it.name) + '</b> <span class="due ' + lb[1] + '">' + lb[0] + '</span>' +
+    (it.status === 'sale' && left != null && left >= 0 ? ' <span class="due amber">あと' + left + '日（' + esc(md(it.until)) + 'まで）</span>' : '') + '</div>' +
+    (it.price ? '<div class="head">' + esc(it.price) + '</div>' : '') +
+    (it.note ? '<div class="rs">' + esc(it.note) + '</div>' : '') +
+    (src.length ? '<div class="tags">' + src.map(x => '<a class="due" href="' + esc(x.url) + '" target="_blank" rel="noopener">' + esc(x.title || '公式') + '</a>').join('') + '</div>' : '') +
+    '</div></li>';
+}
+function saleSec(sales, today) {
+  const items = (sales.items || []).slice().sort((a, b) => (a.status === 'sale' ? 0 : 1) - (b.status === 'sale' ? 0 : 1));
+  const n = items.filter(it => it.status === 'sale').length;
+  return sec('🏷 セール情報', n, '<ul>' + items.map(it => saleItem(it, today)).join('') + '</ul>' +
+    '<div class="disc">申し込みは本人が。最後の支払い画面で金額を確かめる。</div>', n ? 'amber' : '');
 }
 // ---------- タブ（ホーム／投資） ----------
 // 投資タブ: 下落アラートと花子の米国株（YouTube要約）（純粋関数）

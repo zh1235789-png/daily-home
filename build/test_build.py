@@ -4,7 +4,7 @@ import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import tempfile
-from build import load_goals, parse_goals_note, parse_scores, load_picks, load_stocks, load_youtube, parse_due, parse_hub, parse_routines, parse_oet_note
+from build import load_sales, load_goals, parse_goals_note, parse_scores, load_picks, load_stocks, load_youtube, parse_due, parse_hub, parse_routines, parse_oet_note
 
 T = dt.date(2026, 10, 20)
 
@@ -204,6 +204,17 @@ class Scores(unittest.TestCase):
     def test_keep_latest(self):
         rows = "".join(f"| [[2026-01-{d:02d}\\\\|w{d}]] | **{d}** | 1 | 1 | a | b | c | d | — |\n" for d in range(1, 13))
         self.assertEqual([x["total"] for x in parse_scores(rows, keep=3)], [10, 11, 12])
+
+
+    def test_sales(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "sale.json"
+            self.assertIsNone(load_sales(p))
+            p.write_text('{"items": [{"name": "Google AI Pro", "status": "sale", "sources": [{"url": "https://one.google.com/"}, {"url": "http://x"}]},'
+                         ' {"name": "X", "status": "maybe"}, {"status": "none"}]}')
+            r = load_sales(p)
+            self.assertEqual([x["name"] for x in r["items"]], ["Google AI Pro"])
+            self.assertEqual(len(r["items"][0]["sources"]), 1)
 
 
 if __name__ == "__main__":
